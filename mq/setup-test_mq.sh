@@ -32,6 +32,11 @@ ask_yes_no() {
     esac
 }
 
+warn_yellow() {
+    # Optional smoke-test failures must remain visible but non-fatal.
+    printf '\033[33mWARNING: %s\033[0m\n' "$1"
+}
+
 should_run_test() {
     # An environment override supports automation; otherwise ask interactively.
     local variable_name="$1"
@@ -185,14 +190,20 @@ python -m mq.setup_topology
 # Each test is selected independently and defaults to yes.
 if should_run_test RUN_PUBLISH_EVENT_TEST "Run the publish-event test?"; then
     echo "Running the publish-event test..."
-    python -m mq.smoke_test publish
+    if ! python -m mq.smoke_test publish; then
+        warn_yellow \
+            "Publish-event test could not connect to RabbitMQ or did not complete. Setup will continue; verify the broker address, credentials, permissions, port 5672, and firewall access."
+    fi
 else
     echo "Skipping the publish-event test."
 fi
 
 if should_run_test RUN_BAD_MESSAGE_TEST "Run the bad-message/DLQ test?"; then
     echo "Running the bad-message/DLQ test..."
-    python -m mq.smoke_test bad
+    if ! python -m mq.smoke_test bad; then
+        warn_yellow \
+            "Bad-message/DLQ test could not connect to RabbitMQ or did not complete. Setup will continue; verify the broker address, credentials, permissions, port 5672, and firewall access."
+    fi
 else
     echo "Skipping the bad-message/DLQ test."
 fi

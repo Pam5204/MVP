@@ -42,6 +42,12 @@ ask_yes_no() {
     esac
 }
 
+# Print a visible warning without converting an optional connectivity check
+# into an installation failure.
+warn_yellow() {
+    printf '\033[33mWARNING: %s\033[0m\n' "$1"
+}
+
 # Ask for a value while showing a default, then echo the chosen value.
 prompt_with_default() {
     local prompt="$1"
@@ -191,7 +197,7 @@ write_database_env_if_requested() {
         return
     fi
 
-    if ! ask_yes_no "Configure this checkout to use the DreamEscapes MySQL database?" "n"; then
+    if ! ask_yes_no "Configure this Computer to use the DreamEscapes MySQL database?(APP-API,DB)" "n"; then
         echo "Skipping MySQL environment configuration."
         return
     fi
@@ -378,7 +384,7 @@ test_rabbitmq_url_at_end() {
     fi
 
     echo "Testing RabbitMQ URL from ${ENV_FILE}..."
-    python - <<'PY'
+    if python - <<'PY'
 import os
 import sys
 from pathlib import Path
@@ -423,6 +429,15 @@ except Exception as error:
         f"and ZeroTier/firewall connectivity. Error: {error}"
     )
 PY
+    then
+        return 0
+    fi
+
+    # Catch unexpected interpreter/configuration failures outside the Python
+    # check so `set -e` never terminates the installer for connectivity alone.
+    warn_yellow \
+        "RabbitMQ connectivity test could not run. Setup will continue; verify RABBITMQ_URL, credentials, port 5672, and firewall access later."
+    return 0
 }
 
 echo "DreamEscapes dependency and networking setup"
@@ -484,7 +499,7 @@ fi
 # Phase 3: configure MySQL on checkouts that run the API backend or DB consumer.
 write_database_env_if_requested "$DB_IP" "$MYSQL_PORT" "$MQ_IP" "$RABBITMQ_PORT" "$RABBITMQ_USER" "$RABBITMQ_PASSWORD"
 
-if ask_yes_no "Configure a Geoapify API key for this checkout?" "n"; then
+if ask_yes_no "Configure a Geoapify API key for this Computer?(APP-API)" "n"; then
     GEOAPIFY_API_KEY="$(prompt_password_with_default "Enter Geoapify API key" "")"
     if [ -n "$GEOAPIFY_API_KEY" ]; then
         set_env_value "GEOAPIFY_API_KEY" "$GEOAPIFY_API_KEY"
