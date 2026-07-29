@@ -9,6 +9,7 @@ const {
   cacheMessage,
   destinationToBucketPayload,
   escapeHtml,
+  isExpiredSessionError,
   registrationError
 } = require("../logic.js");
 
@@ -63,6 +64,12 @@ test("cache status produces clear user-facing messages", () => {
     cacheMessage("refreshed", ""),
     "Destination data refreshed from Geoapify."
   );
+});
+
+test("only authentication-required 401 responses represent expired sessions", () => {
+  assert.equal(isExpiredSessionError(401, "AUTHENTICATION_REQUIRED"), true);
+  assert.equal(isExpiredSessionError(401, "INVALID_CREDENTIALS"), false);
+  assert.equal(isExpiredSessionError(403, "AUTHENTICATION_REQUIRED"), false);
 });
 
 test("destination save payload includes all backend-required fields", () => {

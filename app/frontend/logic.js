@@ -39,6 +39,11 @@
     return "";
   }
 
+  // Distinguish an expired authenticated session from rejected login details.
+  function isExpiredSessionError(status, code) {
+    return Number(status) === 401 && code === "AUTHENTICATION_REQUIRED";
+  }
+
   // Shape a destination result into the API's bucket-list request contract.
   function destinationToBucketPayload(destination) {
     return {
@@ -69,6 +74,7 @@
     cacheMessage,
     destinationToBucketPayload,
     escapeHtml,
+    isExpiredSessionError,
     registrationError
   };
 }));

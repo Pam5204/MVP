@@ -49,6 +49,12 @@ class FrontendContractTests(unittest.TestCase):
     def test_requests_include_session_credentials(self):
         self.assertIn('credentials: "include"', JAVASCRIPT)
 
+    def test_invalid_login_is_not_treated_as_an_expired_session(self):
+        self.assertIn(
+            "isExpiredSessionError(error.status, error.code)",
+            JAVASCRIPT,
+        )
+
     def test_layout_has_responsive_breakpoints_and_status_components(self):
         self.assertIn("@media (max-width: 900px)", STYLES)
         self.assertIn("@media (max-width: 520px)", STYLES)

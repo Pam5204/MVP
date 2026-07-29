@@ -17,6 +17,7 @@ const {
   cacheMessage,
   destinationToBucketPayload,
   escapeHtml,
+  isExpiredSessionError,
   registrationError
 } = window.DreamEscapesLogic;
 
@@ -193,7 +194,10 @@ async function apiRequest(path, options = {}) {
 }
 
 function handleApiError(error, target = globalMessage) {
-  if (error.status === 401) {
+  // Only protected-route failures represent an expired session. A rejected
+  // login is also HTTP 401, but its INVALID_CREDENTIALS message belongs on
+  // the login form and must replace the temporary "Logging in…" status.
+  if (isExpiredSessionError(error.status, error.code)) {
     clearSession();
     setMessage(globalMessage, "Your session expired. Please log in again.", "error");
     setRoute("login");
