@@ -55,6 +55,16 @@ class FrontendContractTests(unittest.TestCase):
             JAVASCRIPT,
         )
 
+    def test_admin_save_targets_the_containing_user_row(self):
+        self.assertIn(
+            'button.closest(".table-row[data-user-id]")',
+            JAVASCRIPT,
+        )
+        self.assertNotIn(
+            'class="ghost-button admin-user-save" type="button" data-user-id=',
+            JAVASCRIPT,
+        )
+
     def test_layout_has_responsive_breakpoints_and_status_components(self):
         self.assertIn("@media (max-width: 900px)", STYLES)
         self.assertIn("@media (max-width: 520px)", STYLES)

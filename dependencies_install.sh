@@ -515,7 +515,7 @@ update_frontend_config_if_present "$API_IP" "$DJANGO_PORT"
 run_script_if_requested "App/Django dependencies" "app/app_setup.sh"
 run_script_if_requested "API dependencies" "api/setup_api.sh"
 run_script_if_requested "RabbitMQ/MQ setup and tests" "mq/setup-test_mq.sh"
-run_script_if_requested "MySQL schema and application user" "db/setup_mysql.sh"
+run_script_if_requested "MySQL schema and application user(DB)" "db/setup_mysql.sh"
 
 # Ask what MySQL should bind to when this VM is the DB VM.
 MYSQL_BIND_IP="$(prompt_with_default "Enter MySQL bind-address for the DB VM" "$DB_IP")"

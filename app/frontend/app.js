@@ -461,7 +461,7 @@ function renderAdminUsers() {
           <option value="enabled" ${user.account_status === "enabled" ? "selected" : ""}>enabled</option>
           <option value="disabled" ${user.account_status === "disabled" ? "selected" : ""}>disabled</option>
         </select>
-        <button class="ghost-button admin-user-save" type="button" data-user-id="${user.user_id}">Save</button>
+        <button class="ghost-button admin-user-save" type="button">Save</button>
       </div>`).join("")}`;
 }
 
@@ -651,16 +651,24 @@ document.querySelector("#profileForm").addEventListener("submit", async (event) 
 document.querySelector("#adminUsersTable").addEventListener("click", async (event) => {
   const button = event.target.closest(".admin-user-save");
   if (!button) return;
-  const row = button.closest("[data-user-id]");
+  // Select the containing data row explicitly. The old generic selector could
+  // select the Save button itself and then fail to find the row's form fields.
+  const row = button.closest(".table-row[data-user-id]");
+  const roleSelect = row?.querySelector(".role-select");
+  const statusSelect = row?.querySelector(".status-select");
+  if (!row || !roleSelect || !statusSelect) {
+    setMessage("adminMessage", "The selected user row could not be updated.", "error");
+    return;
+  }
   const userId = Number(row.dataset.userId);
   try {
     const roleResult = await apiRequest(`/api/admin/users/${userId}/role`, {
       method: "PUT",
-      body: { role: row.querySelector(".role-select").value }
+      body: { role: roleSelect.value }
     });
     await apiRequest(`/api/admin/users/${userId}/status`, {
       method: "PUT",
-      body: { account_status: row.querySelector(".status-select").value }
+      body: { account_status: statusSelect.value }
     });
     setMessage("adminMessage", `Updated ${roleResult.user.email}.`, "success");
     await loadAdminDashboard();
