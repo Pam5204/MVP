@@ -1,0 +1,1 @@
+"""DreamEscapes HTTP API boundary."""

@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+.venv/
+
+#Environment variables
+.env
+.env.*
+!.env.example
+!**/*.env.example
+
+#VS code
+.vscode/

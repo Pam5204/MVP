@@ -1,0 +1,236 @@
+<!doctype html>
+<!--
+  DreamEscapes single-page application shell.
+  JavaScript switches the view sections, calls the Django API, and safely
+  renders destination, profile, bucket-list, and administrator data.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DreamEscapes</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <!-- Persistent navigation changes visibility based on session and role. -->
+    <header class="topbar">
+      <a class="brand" href="#dashboard" data-route="dashboard" aria-label="DreamEscapes home">
+        <span class="brand-mark" aria-hidden="true">DE</span>
+        <span>DreamEscapes</span>
+      </a>
+      <nav class="nav" aria-label="Primary navigation">
+        <a href="#login" data-route="login" data-auth-view="logged-out">Login</a>
+        <a href="#register" data-route="register" data-auth-view="logged-out">Register</a>
+        <a href="#dashboard" data-route="dashboard" data-auth-view="logged-in">Search</a>
+        <a href="#bucket" data-route="bucket" data-auth-view="logged-in">Bucket List</a>
+        <a href="#profile" data-route="profile" data-auth-view="logged-in">Profile</a>
+        <a href="#admin" data-route="admin" data-admin-view>Admin</a>
+      </nav>
+      <button
+        class="icon-button"
+        id="logoutButton"
+        type="button"
+        title="Log out"
+        aria-label="Log out"
+        data-auth-view="logged-in"
+      >Log out</button>
+    </header>
+
+    <main class="app-shell">
+      <!-- Site introduction and the current signed-in/signed-out state. -->
+      <section class="status-band" aria-labelledby="siteTitle">
+        <div>
+          <p class="eyebrow">DreamEscapes</p>
+          <h1 id="siteTitle">Find and save destinations for your next trip.</h1>
+        </div>
+        <div class="session-card" id="sessionStatus">
+          <span class="session-label">Signed out</span>
+          <strong>Login required for account features</strong>
+        </div>
+      </section>
+
+      <p class="global-message" id="globalMessage" role="status" aria-live="polite"></p>
+
+      <!-- Public authentication views. -->
+      <section class="view" id="loginView" aria-labelledby="loginTitle">
+        <form class="panel narrow" id="loginForm" novalidate>
+          <p class="eyebrow">Returning user</p>
+          <h2 id="loginTitle">Login</h2>
+          <label>Email
+            <input type="email" name="email" autocomplete="email" required>
+          </label>
+          <label>Password
+            <input type="password" name="password" autocomplete="current-password" required>
+          </label>
+          <button class="primary-button" type="submit">Login</button>
+          <p class="form-message" id="loginMessage" role="status"></p>
+        </form>
+      </section>
+
+      <section class="view" id="registerView" aria-labelledby="registerTitle">
+        <form class="panel narrow" id="registerForm" novalidate>
+          <p class="eyebrow">New account</p>
+          <h2 id="registerTitle">Create your account</h2>
+          <label>Username
+            <input type="text" name="username" minlength="3" maxlength="100" required>
+          </label>
+          <label>Email
+            <input type="email" name="email" autocomplete="email" required>
+          </label>
+          <label>Password
+            <input type="password" name="password" autocomplete="new-password" minlength="8" required>
+          </label>
+          <label>Confirm password
+            <input type="password" name="confirmPassword" autocomplete="new-password" minlength="8" required>
+          </label>
+          <button class="primary-button" type="submit">Create account</button>
+          <p class="form-message" id="registerMessage" role="status"></p>
+        </form>
+      </section>
+
+      <!-- Authenticated destination search and result cards. -->
+      <section class="view" id="dashboardView" aria-labelledby="dashboardTitle">
+        <section class="workspace">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Destination search</p>
+              <h2 id="dashboardTitle">Find destinations and attractions</h2>
+            </div>
+          </div>
+          <form class="filter-panel" id="searchForm">
+            <label>Destination name
+              <input type="search" name="name" placeholder="Newark, Paris, Tokyo">
+            </label>
+            <label>Keyword
+              <input type="search" name="keyword" placeholder="museum, beach, food">
+            </label>
+            <label>Country
+              <input type="text" name="country" placeholder="United States or US">
+            </label>
+            <label>Category
+              <select name="category">
+                <option value="">All categories</option>
+                <option value="family-friendly">Family-friendly</option>
+                <option value="outdoor">Outdoor</option>
+                <option value="budget">Budget</option>
+                <option value="culture">Culture</option>
+              </select>
+            </label>
+            <label>Attraction type
+              <select name="attraction_type">
+                <option value="">All attractions</option>
+                <option value="museum">Museum</option>
+                <option value="beach">Beach</option>
+                <option value="park">Park</option>
+                <option value="food">Food</option>
+              </select>
+            </label>
+            <button class="primary-button" type="submit">Search</button>
+          </form>
+          <p class="status-message" id="searchStatus" role="status"></p>
+          <div class="loading-state" id="searchLoading" hidden>Searching destinations…</div>
+          <div class="destination-grid" id="destinationGrid" aria-live="polite"></div>
+        </section>
+      </section>
+
+      <!-- Selected destination details, nearby attractions, and save action. -->
+      <section class="view" id="detailsView" aria-labelledby="detailsTitle">
+        <div class="details-layout">
+          <section class="panel">
+            <p class="eyebrow">Destination details</p>
+            <h2 id="detailsTitle">Destination</h2>
+            <p class="status-message" id="detailsStatus" role="status"></p>
+            <div class="loading-state" id="detailsLoading" hidden>Loading destination details…</div>
+            <div class="destination-detail-body" id="destinationDetails"></div>
+          </section>
+          <aside class="sidebar">
+            <div class="section-heading compact">
+              <div><p class="eyebrow">Nearby</p><h2>Attractions</h2></div>
+            </div>
+            <ul class="info-list" id="nearbyAttractions"></ul>
+            <div class="section-heading compact points-heading">
+              <div><p class="eyebrow">Points</p><h2>Points of interest</h2></div>
+            </div>
+            <ul class="info-list" id="pointsOfInterest"></ul>
+          </aside>
+        </div>
+      </section>
+
+      <!-- The signed-in user's editable saved destinations. -->
+      <section class="view" id="bucketView" aria-labelledby="bucketTitle">
+        <section class="workspace">
+          <div class="section-heading">
+            <div><p class="eyebrow">Saved trips</p><h2 id="bucketTitle">Your bucket list</h2></div>
+          </div>
+          <p class="status-message" id="bucketStatus" role="status"></p>
+          <div class="loading-state" id="bucketLoading" hidden>Loading your bucket list…</div>
+          <div class="bucket-grid" id="bucketList"></div>
+        </section>
+      </section>
+
+      <!-- Account summary and profile update form. -->
+      <section class="view" id="profileView" aria-labelledby="profileTitle">
+        <div class="profile-grid">
+          <section class="panel">
+            <p class="eyebrow">Profile</p>
+            <h2 id="profileTitle">Your account</h2>
+            <div class="profile-summary" id="profileSummary"></div>
+          </section>
+          <form class="panel" id="profileForm" novalidate>
+            <p class="eyebrow">Edit profile</p>
+            <h2>Update profile</h2>
+            <label>Username
+              <input type="text" name="username" minlength="3" maxlength="100" required>
+            </label>
+            <label>Email
+              <input type="email" name="email" required>
+            </label>
+            <label>New password
+              <input type="password" name="password" minlength="8" placeholder="Leave blank to keep current password">
+            </label>
+            <label>Travel preferences
+              <textarea name="travel_preferences" rows="4"></textarea>
+            </label>
+            <button class="primary-button" type="submit">Save profile</button>
+            <p class="form-message" id="profileMessage" role="status"></p>
+          </form>
+        </div>
+      </section>
+
+      <!-- Role-protected user management, destination review, and audit log. -->
+      <section class="view" id="adminView" aria-labelledby="adminTitle">
+        <section class="admin-dashboard">
+          <p class="eyebrow">Administrator</p>
+          <h2 id="adminTitle">Admin dashboard</h2>
+          <p class="protected-copy error" id="adminAccessMessage" role="alert"></p>
+          <div class="loading-state" id="adminLoading" hidden>Loading administration data…</div>
+          <div id="adminContent">
+            <div class="admin-tabs" role="tablist" aria-label="Admin sections">
+              <button class="ghost-button admin-tab active" type="button" data-admin-section="users">Users</button>
+              <button class="ghost-button admin-tab" type="button" data-admin-section="destinations">Destinations</button>
+              <button class="ghost-button admin-tab" type="button" data-admin-section="audit">Audit logs</button>
+            </div>
+            <section class="admin-section active" id="adminUsersSection">
+              <h3>User, role, and account-status management</h3>
+              <div class="admin-table" id="adminUsersTable"></div>
+            </section>
+            <section class="admin-section" id="adminDestinationsSection">
+              <h3>Destination cache review</h3>
+              <div class="admin-table" id="adminDestinationReview"></div>
+            </section>
+            <section class="admin-section" id="adminAuditSection">
+              <h3>Audit activity</h3>
+              <ol class="activity-log" id="adminAuditLog"></ol>
+            </section>
+            <p class="form-message" id="adminMessage" role="status"></p>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <!-- Load runtime configuration and pure helpers before the DOM controller. -->
+    <script src="config.js"></script>
+    <script src="logic.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

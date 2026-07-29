@@ -1,0 +1,702 @@
+/*
+ * DreamEscapes application theme and responsive layout.
+ *
+ * Rules are grouped by global tokens, navigation/status chrome, shared forms,
+ * destination and bucket-list content, admin tables, and mobile breakpoints.
+ */
+
+/* Shared color, spacing, and surface tokens. */
+:root {
+  color-scheme: light;
+  --ink: #172026;
+  --muted: #62717d;
+  --line: #d8e1e8;
+  --panel: #ffffff;
+  --soft: #f5f8fa;
+  --teal: #087e8b;
+  --coral: #d95d39;
+  --green: #2f7d32;
+  --focus: #f2b705;
+  --shadow: 0 18px 50px rgba(23, 32, 38, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #eef4f6;
+  color: var(--ink);
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.5;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Persistent application header, brand, navigation, and logout control. */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 72px;
+  padding: 0 28px;
+  background: rgba(255, 255, 255, 0.94);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(12px);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: max-content;
+  font-weight: 800;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background: var(--teal);
+  color: #fff;
+  font-size: 0.85rem;
+  letter-spacing: 0;
+}
+
+.nav {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  justify-content: center;
+}
+
+.nav a {
+  padding: 10px 14px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.nav a.active,
+.nav a:hover {
+  background: #e4f1f3;
+  color: var(--teal);
+}
+
+[data-auth-view].is-hidden {
+  display: none;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: auto;
+  padding: 0 12px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 1.1rem;
+}
+
+.app-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 28px auto 48px;
+}
+
+/* Session summary, active views, and global feedback messages. */
+.status-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 148px;
+  padding: 28px;
+  background: #12343b;
+  color: #fff;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.session-card {
+  display: grid;
+  gap: 4px;
+  min-width: 230px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.session-label {
+  color: #f2b705;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.status-band h1,
+h2,
+p {
+  margin: 0;
+}
+
+.status-band h1 {
+  max-width: 760px;
+  font-size: clamp(1.65rem, 3vw, 2.75rem);
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.eyebrow {
+  margin-bottom: 8px;
+  color: var(--coral);
+  font-size: 0.77rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.view {
+  display: none;
+  margin-top: 24px;
+}
+
+.view.active {
+  display: block;
+}
+
+.global-message {
+  min-height: 24px;
+  margin: 14px 4px -10px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.global-message.success {
+  color: var(--green);
+}
+
+.global-message.error {
+  color: #b3261e;
+}
+
+.global-message.warning {
+  color: #8a5a00;
+}
+
+/* Shared workspace panels, sidebars, headings, and form controls. */
+.panel,
+.workspace,
+.sidebar {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.panel {
+  padding: 28px;
+}
+
+.panel.narrow {
+  width: min(560px, 100%);
+  margin: 0 auto;
+}
+
+.panel.wide {
+  width: min(920px, 100%);
+  margin: 0 auto;
+}
+
+.panel h2,
+.workspace h2,
+.sidebar h2 {
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+label {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  color: #2d3b43;
+  font-weight: 700;
+}
+
+input,
+select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #bccbd4;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid rgba(242, 183, 5, 0.45);
+  outline-offset: 2px;
+}
+
+.primary-button,
+.ghost-button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 800;
+}
+
+.primary-button {
+  margin-top: 22px;
+  border: 1px solid var(--teal);
+  background: var(--teal);
+  color: #fff;
+}
+
+.ghost-button {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--teal);
+}
+
+.form-message {
+  min-height: 24px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.form-message.success {
+  color: var(--green);
+}
+
+.form-message.error {
+  color: #b3261e;
+}
+
+.protected-copy {
+  margin-top: 14px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.protected-copy.error {
+  color: #b3261e;
+}
+
+.protected-details {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+/* Search, destination details, profile, and bucket-list layouts. */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 24px;
+}
+
+.profile-grid,
+.details-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 24px;
+}
+
+.workspace,
+.sidebar {
+  padding: 22px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.section-heading.compact {
+  margin-bottom: 12px;
+}
+
+.search-row,
+.filter-panel {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+}
+
+.filter-panel {
+  grid-template-columns: repeat(2, minmax(180px, 1fr)) 160px;
+  align-items: end;
+}
+
+.search-row .primary-button {
+  margin-top: 0;
+}
+
+.filter-panel label {
+  margin-top: 0;
+}
+
+.filter-panel .primary-button {
+  margin-top: 0;
+}
+
+.destination-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.destination-card {
+  display: grid;
+  gap: 10px;
+  min-height: 230px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.destination-card.is-saved {
+  border-color: rgba(47, 125, 50, 0.45);
+  background: #f0f7f0;
+}
+
+.destination-art {
+  min-height: 92px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #087e8b, #f2b705 58%, #d95d39);
+}
+
+.destination-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.destination-card p {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.card-actions button {
+  flex: 1;
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.card-actions .primary-button {
+  margin-top: 0;
+}
+
+.bucket-grid,
+.activity-log {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-log li {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--soft);
+}
+
+.bucket-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.bucket-card {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.bucket-card h3 {
+  margin: 0 0 6px;
+}
+
+.bucket-card > p {
+  color: var(--muted);
+}
+
+.status-message {
+  min-height: 24px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.status-message.warning {
+  color: #8a5a00;
+}
+
+.status-message.error {
+  color: #b3261e;
+}
+
+.status-message.success {
+  color: var(--green);
+}
+
+.loading-state,
+.empty-state {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px dashed #9bb0bc;
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.profile-summary,
+/* Detailed destination metadata and editable saved-trip controls. */
+.destination-detail-body {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #bccbd4;
+  border-radius: 6px;
+  resize: vertical;
+}
+
+.detail-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.detail-meta p {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--soft);
+}
+
+.info-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.info-list li {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--soft);
+}
+
+.points-heading {
+  margin-top: 22px;
+}
+
+.bucket-edit-form {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.bucket-edit-form select {
+  min-height: 38px;
+}
+
+.activity-log {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.activity-log li {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+/* Administrator tabs, review rows, audit activity, and user tables. */
+.admin-table {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.admin-dashboard {
+  width: min(1060px, 100%);
+  margin: 0 auto;
+  padding: 28px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.admin-tab.active {
+  border-color: var(--teal);
+  background: #e4f1f3;
+}
+
+.admin-section {
+  display: none;
+  margin-top: 18px;
+}
+
+.admin-section.active {
+  display: block;
+}
+
+.admin-section h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.review-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--soft);
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.4fr) minmax(120px, 1fr) minmax(90px, 0.8fr) minmax(90px, 0.8fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--soft);
+}
+
+.table-row.header {
+  background: #e4f1f3;
+  color: #26434a;
+  font-weight: 800;
+}
+
+/* Collapse multi-column layouts for tablets and narrow browser windows. */
+@media (max-width: 900px) {
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 14px 16px;
+  }
+
+  .nav {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .status-band,
+  .dashboard-grid,
+  .profile-grid,
+  .details-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .status-band {
+    display: grid;
+  }
+
+  .session-card {
+    min-width: 0;
+  }
+
+  .search-row,
+  .filter-panel,
+  .destination-grid,
+  .bucket-grid,
+  .detail-meta,
+  .table-row {
+    grid-template-columns: 1fr;
+  }
+
+  .review-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+/* Reduce outer spacing further on small mobile screens. */
+@media (max-width: 520px) {
+  .app-shell {
+    width: min(100% - 20px, 1180px);
+    margin-top: 14px;
+  }
+
+  .status-band,
+  .panel,
+  .workspace,
+  .sidebar {
+    padding: 18px;
+  }
+
+  .nav a {
+    padding-inline: 10px;
+  }
+}

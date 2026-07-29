@@ -1,0 +1,14 @@
+asgiref==3.11.1
+bcrypt==5.0.0
+certifi==2026.6.17
+charset-normalizer==3.4.7
+cryptography==49.0.0
+Django==6.0.6
+djangorestframework==3.17.1
+idna==3.18
+mysqlclient==2.2.8
+pika==1.4.1
+python-dotenv==1.2.2
+requests==2.34.2
+sqlparse==0.5.5
+urllib3==2.7.0
