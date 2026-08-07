@@ -44,6 +44,11 @@ CORS_ALLOWED_ORIGINS = {
     ).split(",")
     if origin.strip()
 }
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
 
 
 # Application definition
@@ -113,7 +118,9 @@ DATABASES = {
 
 SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Lax'
+# The APP reverse proxy keeps browser traffic same-origin, allowing the safer
+# Lax cookie policy even though Django runs on a different VM internally.
+SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 SESSION_COOKIE_AGE = 1800
 SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", False)
 CSRF_COOKIE_SECURE = _env_bool("CSRF_COOKIE_SECURE", False)

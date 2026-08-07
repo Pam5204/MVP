@@ -8,7 +8,13 @@
  */
 
 // Runtime configuration, storage keys, and shared pure helper functions.
-const BACKEND_BASE_URL = (window.BACKEND_BASE_URL || "http://localhost:8000").replace(/\/+$/, "");
+// A same-origin default is important in the four-VM deployment: the browser
+// calls the APP VM and Nginx proxies /api to the API VM without exposing the
+// API VM as a separate cookie origin.
+const configuredBackendBaseUrl = typeof window.BACKEND_BASE_URL === "string"
+  ? window.BACKEND_BASE_URL
+  : window.location.origin;
+const BACKEND_BASE_URL = configuredBackendBaseUrl.replace(/\/+$/, "");
 const SESSION_STORAGE_KEY = "dreamescapesSession";
 const SELECTED_PLACE_KEY = "dreamescapesSelectedPlace";
 const SESSION_DURATION_MS = 30 * 60 * 1000;

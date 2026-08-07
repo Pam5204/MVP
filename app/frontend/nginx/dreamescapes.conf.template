@@ -1,0 +1,38 @@
+# DreamEscapes APP VM: static frontend plus same-origin API reverse proxy.
+server {
+    listen __APP_PORT__ default_server;
+    listen [::]:__APP_PORT__ default_server;
+    server_name _;
+
+    root __WEB_ROOT__;
+    index index.html;
+
+    # Preserve /api/... while forwarding it to Django on the API VM. Browser
+    # cookies remain associated with the APP origin because Nginx is the only
+    # endpoint visible to the browser.
+    location /api/ {
+        proxy_pass http://__API_HOST__:__API_PORT__;
+        proxy_http_version 1.1;
+        proxy_set_header Host $proxy_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        # Stay slightly above Gunicorn's bounded 60-second worker timeout so
+        # Nginx does not terminate a valid API response first.
+        proxy_send_timeout 65s;
+        proxy_read_timeout 65s;
+    }
+
+    # config.js must not be cached across a deployment configuration change.
+    location = /config.js {
+        add_header Cache-Control "no-store";
+        try_files $uri =404;
+    }
+
+    # The hash-based single-page application normally requests real assets;
+    # the index fallback also keeps direct browser navigation predictable.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

@@ -5,6 +5,8 @@ set -euo pipefail
 # application user, load the schema, and optionally install demo data.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+SERVICE_TEMPLATE="${SCRIPT_DIR}/systemd/dreamescapes-db-consumer.service.template"
+SERVICE_NAME="dreamescapes-db-consumer.service"
 
 if ! command -v apt-get >/dev/null 2>&1; then
   echo "ERROR: setup_mysql.sh currently supports Ubuntu/Debian DB VMs." >&2
@@ -66,6 +68,7 @@ python -m pip install \
 DB_NAME="${DB_NAME:-DreamEscapes}"
 DB_USER="${DB_USER:-dream_app}"
 DB_APP_HOST="${DB_APP_HOST:-%}"
+DB_CONSUMER_HOST="${DB_CONSUMER_HOST:-localhost}"
 LOAD_SEED_DATA="${LOAD_SEED_DATA:-no}"
 
 if [[ "$DB_NAME" != "DreamEscapes" ]]; then
@@ -78,6 +81,10 @@ if [[ ! "$DB_USER" =~ ^[A-Za-z0-9_]+$ ]]; then
 fi
 if [[ ! "$DB_APP_HOST" =~ ^[A-Za-z0-9_.:%-]+$ ]]; then
   echo "DB_APP_HOST contains unsupported characters." >&2
+  exit 1
+fi
+if [[ ! "$DB_CONSUMER_HOST" =~ ^[A-Za-z0-9_.:%-]+$ ]]; then
+  echo "DB_CONSUMER_HOST contains unsupported characters." >&2
   exit 1
 fi
 
@@ -106,12 +113,18 @@ CREATE USER IF NOT EXISTS '${DB_USER}'@'${DB_APP_HOST}'
   IDENTIFIED BY '${escaped_password}';
 ALTER USER '${DB_USER}'@'${DB_APP_HOST}'
   IDENTIFIED BY '${escaped_password}';
+CREATE USER IF NOT EXISTS '${DB_USER}'@'${DB_CONSUMER_HOST}'
+  IDENTIFIED BY '${escaped_password}';
+ALTER USER '${DB_USER}'@'${DB_CONSUMER_HOST}'
+  IDENTIFIED BY '${escaped_password}';
 # The application needs normal row access and permission to call the schema's
 # stored procedures. CREATE ROUTINE and ALTER ROUTINE additionally allow the
 # repeatable db/test_schema.sql assertions to create and remove their temporary
 # test procedure without granting global database-administration privileges.
 GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE, CREATE ROUTINE, ALTER ROUTINE
   ON \`${DB_NAME}\`.* TO '${DB_USER}'@'${DB_APP_HOST}';
+GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE, CREATE ROUTINE, ALTER ROUTINE
+  ON \`${DB_NAME}\`.* TO '${DB_USER}'@'${DB_CONSUMER_HOST}';
 FLUSH PRIVILEGES;
 SQL
 
@@ -158,6 +171,36 @@ if [[ -x "$DJANGO_PYTHON" ]] \
 else
   echo "ERROR: Django migration dependencies were not installed." >&2
   exit 1
+fi
+
+# Install the authentication consumer as a supervised DB-VM service. It uses
+# db/.env first and restarts automatically after temporary MQ/network outages.
+if [[ ! -f "$SERVICE_TEMPLATE" ]]; then
+  echo "ERROR: DB consumer systemd service template is missing." >&2
+  exit 1
+fi
+SERVICE_USER="${SUDO_USER:-$(id -un)}"
+SERVICE_GROUP="$(id -gn "$SERVICE_USER")"
+temporary_service="$(mktemp)"
+trap 'rm -f "$temporary_service"' EXIT
+sed \
+  -e "s|__SERVICE_USER__|${SERVICE_USER}|g" \
+  -e "s|__SERVICE_GROUP__|${SERVICE_GROUP}|g" \
+  -e "s|__REPO_ROOT__|${REPO_ROOT}|g" \
+  "$SERVICE_TEMPLATE" > "$temporary_service"
+sudo install -m 0644 "$temporary_service" "/etc/systemd/system/${SERVICE_NAME}"
+sudo systemctl daemon-reload
+sudo systemctl enable "$SERVICE_NAME"
+
+# A direct setup_mysql.sh run may occur before MQ credentials are configured.
+# Start immediately only when either supported private env file contains them.
+if grep -q '^RABBITMQ_URL=.' "${SCRIPT_DIR}/.env" 2>/dev/null \
+  || grep -q '^RABBITMQ_URL=.' "${REPO_ROOT}/.env" 2>/dev/null; then
+  sudo systemctl restart "$SERVICE_NAME"
+  echo "DB authentication consumer service started."
+else
+  echo "WARNING: DB consumer service installed but not started because RABBITMQ_URL is not configured."
+  echo "After configuring db/.env, run: sudo systemctl restart ${SERVICE_NAME}"
 fi
 
 echo "DreamEscapes MySQL setup complete."

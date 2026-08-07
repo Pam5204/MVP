@@ -15,6 +15,15 @@ import pika
 from dotenv import load_dotenv
 from MySQLdb.cursors import DictCursor
 
+# ---------------------------------------------------------------------------
+# Environment configuration
+#
+# Load DB-role secrets before importing mq.config because that module resolves
+# RABBITMQ_URL at import time. This ordering lets a dedicated DB VM operate
+# solely from db/.env without requiring a duplicate repository-level .env.
+load_dotenv(Path(__file__).with_name(".env"))
+load_dotenv()
+
 from mq.config import (
     AUTH_REQUEST_QUEUE,
     RABBITMQ_BLOCKED_TIMEOUT,
@@ -28,15 +37,6 @@ from mq.rabbitmq import (
     publish_event_type,
     validate_auth_message,
 )
-
-# ---------------------------------------------------------------------------
-# Environment configuration
-#
-# The DB role can keep its credentials in db/.env. The repository-level .env
-# remains a fallback for single-VM development. Neither file is committed.
-load_dotenv(Path(__file__).with_name(".env"))
-load_dotenv()
-
 
 # ---------------------------------------------------------------------------
 # MySQL connection handling

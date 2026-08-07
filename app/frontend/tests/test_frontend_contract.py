@@ -7,6 +7,7 @@ FRONTEND_DIR = Path(__file__).resolve().parents[1]
 HTML = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
 JAVASCRIPT = (FRONTEND_DIR / "app.js").read_text(encoding="utf-8")
 STYLES = (FRONTEND_DIR / "styles.css").read_text(encoding="utf-8")
+CONFIG = (FRONTEND_DIR / "config.js").read_text(encoding="utf-8")
 
 
 class FrontendContractTests(unittest.TestCase):
@@ -48,6 +49,13 @@ class FrontendContractTests(unittest.TestCase):
 
     def test_requests_include_session_credentials(self):
         self.assertIn('credentials: "include"', JAVASCRIPT)
+
+    def test_four_vm_frontend_uses_the_app_origin(self):
+        """Prevent direct browser calls to the separate API VM."""
+        self.assertIn("window.location.origin", CONFIG)
+        self.assertNotIn("127.0.0.1:8000", CONFIG)
+        self.assertIn("window.location.origin", JAVASCRIPT)
+        self.assertNotIn('|| "http://localhost:8000"', JAVASCRIPT)
 
     def test_invalid_login_is_not_treated_as_an_expired_session(self):
         self.assertIn(

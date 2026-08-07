@@ -5,6 +5,7 @@ charset-normalizer==3.4.7
 cryptography==49.0.0
 Django==6.0.6
 djangorestframework==3.17.1
+gunicorn==26.0.0
 idna==3.18
 mysqlclient==2.2.8
 pika==1.4.1

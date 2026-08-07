@@ -1,3 +1,5 @@
-// Runtime frontend configuration.
-// dependencies_install.sh updates this value for the APP/API VM IP.
-window.BACKEND_BASE_URL = "http://127.0.0.1:8000";
+// Keep browser requests on the APP VM origin. The APP VM's Nginx service
+// forwards /api requests to the separate API VM, so session cookies never
+// become third-party/cross-site cookies merely because the VMs use different
+// ZeroTier IP addresses.
+window.BACKEND_BASE_URL = window.location.origin;

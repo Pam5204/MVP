@@ -17,6 +17,8 @@ seed data, database assertions, and the DB-role authentication consumer.
   bucket ownership/duplicates, cache freshness/expiry, history, and audit data.
 - `auth_consumer.py` uses mysqlclient to process registration/login commands
   from RabbitMQ on the DB VM and never returns or logs password material.
+- `systemd/dreamescapes-db-consumer.service.template` keeps that consumer
+  running across reboots and temporary network or RabbitMQ failures.
 - `db.env.example` documents required deployment variables without secrets.
 
 ## Setup
@@ -25,7 +27,8 @@ From the repository root on the DB VM:
 
 ```bash
 DB_USER=dream_app \
-DB_APP_HOST='10.%' \
+DB_APP_HOST='API_VM_ZEROTIER_IP' \
+DB_CONSUMER_HOST=localhost \
 DB_PASSWORD='supply-outside-git' \
 LOAD_SEED_DATA=yes \
 bash db/setup_mysql.sh
@@ -42,11 +45,13 @@ Run the database assertions:
 mysql --user=dream_app --password DreamEscapes < db/test_schema.sql
 ```
 
-Start the production MQ authentication consumer after loading environment
-variables:
+The setup script installs and enables the production MQ authentication
+consumer. If RabbitMQ configuration was not present during setup, start it
+after creating `db/.env`:
 
 ```bash
-python -m db.auth_consumer
+sudo systemctl restart dreamescapes-db-consumer
+sudo systemctl status dreamescapes-db-consumer --no-pager
 ```
 
 The Django backend always uses MySQL. Configure the `DB_*` variables from

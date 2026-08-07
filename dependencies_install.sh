@@ -3,8 +3,8 @@
 # Stop the networking setup immediately if any command fails.
 set -e
 
-# This script can install/join ZeroTier first, optionally run the role setup
-# scripts, then update only the configs relevant to services detected locally.
+# This script can install/join ZeroTier first, select exactly which of the four
+# VM roles to configure, and write only the secrets required by that role.
 
 ENV_FILE=".env"
 DB_ENV_FILE="db/.env"
@@ -78,6 +78,7 @@ set_env_value() {
     local temp_file
 
     touch "$ENV_FILE"
+    chmod 600 "$ENV_FILE" 2>/dev/null || true
 
     if grep -q "^${key}=" "$ENV_FILE"; then
         temp_file="$(mktemp)"
@@ -86,6 +87,7 @@ set_env_value() {
             index($0, prefix) == 1 { print prefix value; next }
             { print }
         ' "$ENV_FILE" > "$temp_file"
+        chmod 600 "$temp_file" 2>/dev/null || true
         mv "$temp_file" "$ENV_FILE"
     else
         echo "${key}=${value}" >> "$ENV_FILE"
@@ -185,6 +187,7 @@ write_database_env_if_requested() {
     local rabbitmq_port="$4"
     local rabbitmq_user="$5"
     local rabbitmq_password="$6"
+    local write_db_role_env="${7:-no}"
     local db_name
     local db_user
     local db_password
@@ -197,7 +200,7 @@ write_database_env_if_requested() {
         return
     fi
 
-    if ! ask_yes_no "Configure this Computer to use the DreamEscapes MySQL database?(APP-API,DB)" "n"; then
+    if ! ask_yes_no "Configure this API/DB VM to use the DreamEscapes MySQL database?" "y"; then
         echo "Skipping MySQL environment configuration."
         return
     fi
@@ -221,9 +224,14 @@ write_database_env_if_requested() {
     set_env_value "DB_USER" "$db_user"
     set_env_value "DB_PASSWORD" "$db_password"
 
-    mkdir -p "$(dirname "$DB_ENV_FILE")"
-    cat > "$DB_ENV_FILE" <<EOF
-DB_HOST=${db_host}
+    # Only the DB VM needs the second private file consumed by
+    # db.auth_consumer. The API VM reads the repository-level .env.
+    if [ "$write_db_role_env" = "yes" ]; then
+        mkdir -p "$(dirname "$DB_ENV_FILE")"
+        cat > "$DB_ENV_FILE" <<EOF
+# The DB consumer runs beside MySQL and uses its local socket/account. The API
+# VM keeps the DB VM's network address in the repository-level .env above.
+DB_HOST=localhost
 DB_PORT=${mysql_port}
 DB_NAME=${db_name}
 DB_USER=${db_user}
@@ -237,47 +245,52 @@ AUTH_REGISTER_ROUTING_KEY=auth.register.request
 AUTH_LOGIN_ROUTING_KEY=auth.login.request
 EOF
 
-    chmod 600 "$DB_ENV_FILE" 2>/dev/null || true
+        chmod 600 "$DB_ENV_FILE" 2>/dev/null || true
+    fi
     export DB_NAME="$db_name"
     export DB_USER="$db_user"
     export DB_PASSWORD="$db_password"
-    echo "Wrote database settings to ${ENV_FILE} and ${DB_ENV_FILE}."
+    if [ "$write_db_role_env" = "yes" ]; then
+        echo "Wrote database settings to ${ENV_FILE} and ${DB_ENV_FILE}."
+    else
+        echo "Wrote API database settings to ${ENV_FILE}."
+    fi
 }
 
-# Update the browser-facing backend URL when frontend files exist on this VM.
+# Keep the browser API URL on the APP origin. app_setup.sh installs Nginx to
+# proxy /api to the separate API VM, which avoids cross-site session cookies.
 update_frontend_config_if_present() {
-    local backend_ip="$1"
-    local backend_port="$2"
-
     if [ ! -f "$FRONTEND_CONFIG_FILE" ]; then
-        echo "Frontend config not found; skipping frontend IP update."
+        echo "Frontend config not found; skipping same-origin update."
         return
     fi
 
-    echo "Updating frontend backend URL in ${FRONTEND_CONFIG_FILE}..."
+    echo "Updating frontend to use the APP VM same-origin API proxy..."
     cat > "$FRONTEND_CONFIG_FILE" <<EOF
-// Runtime frontend configuration.
-// dependencies_install.sh updates this value for the APP/API VM IP.
-window.BACKEND_BASE_URL = "http://${backend_ip}:${backend_port}";
+// Keep browser requests on the APP VM origin. Nginx forwards /api requests to
+// the separate API VM without turning its session cookie into a cross-site one.
+window.BACKEND_BASE_URL = window.location.origin;
 EOF
 }
 
-# Run a role setup script only when the operator chooses to run it.
-run_script_if_requested() {
+# Run only the role setup scripts selected near the start of this installer.
+run_script_if_selected() {
     local label="$1"
     local script_path="$2"
+    local selected="$3"
 
-    if [ ! -f "$script_path" ]; then
-        echo "${label} setup script not found at ${script_path}; skipping."
+    if [ "$selected" != "yes" ]; then
+        echo "Skipping ${label} setup on this VM."
         return
     fi
 
-    if ask_yes_no "Run ${label} setup script now?" "n"; then
-        echo "Running ${script_path}..."
-        bash "$script_path"
-    else
-        echo "Skipping ${label} setup script."
+    if [ ! -f "$script_path" ]; then
+        echo "ERROR: ${label} setup script not found at ${script_path}." >&2
+        exit 1
     fi
+
+    echo "Running ${script_path}..."
+    bash "$script_path"
 }
 
 # Allow MySQL to listen on the ZeroTier interface when MySQL is installed here.
@@ -363,9 +376,9 @@ print_detection_summary() {
     fi
 
     if [ -f "manage.py" ] && python3 -c "import django" >/dev/null 2>&1; then
-        echo "  - APP/API role: Django project detected"
+        echo "  - API role: Django project detected"
     else
-        echo "  - APP/API role: not detected"
+        echo "  - API role: not detected"
     fi
 
     if [ -f "$FRONTEND_CONFIG_FILE" ]; then
@@ -466,67 +479,138 @@ API_IP="$(prompt_with_default "Enter API/Django VM ZeroTier IP" "$APP_IP")"
 DB_IP="$(prompt_with_default "Enter DB/MySQL VM ZeroTier IP" "localhost")"
 MQ_IP="$(prompt_with_default "Enter MQ/RabbitMQ VM ZeroTier IP" "localhost")"
 
-# Ask for common service ports and RabbitMQ credentials.
-DJANGO_PORT="$(prompt_with_default "Enter Django/API port" "8000")"
+# Ask for distinct APP and API ports. They may both use 8000 because they run
+# on different VMs.
+APP_PORT="$(prompt_with_default "Enter APP/frontend port" "8000")"
+API_PORT="$(prompt_with_default "Enter Django/API port" "8000")"
 MYSQL_PORT="$(prompt_with_default "Enter MySQL port" "3306")"
 RABBITMQ_PORT="$(prompt_with_default "Enter RabbitMQ AMQP port" "5672")"
-RABBITMQ_USER="$(prompt_with_default "Enter RabbitMQ username" "$DEFAULT_RABBITMQ_USER")"
-RABBITMQ_PASSWORD="$(prompt_password_with_default "Enter RabbitMQ password" "")"
 
-if [ -z "$RABBITMQ_PASSWORD" ]; then
-    echo "ERROR: RabbitMQ password cannot be empty and has no committed default."
+# Select this VM's one intended role before requesting or storing role secrets.
+# Separate prompts make the same script usable on all four clean VMs.
+RUN_APP_ROLE="no"
+RUN_API_ROLE="no"
+RUN_DB_ROLE="no"
+RUN_MQ_ROLE="no"
+if ask_yes_no "Configure this VM as the APP/frontend role?" "n"; then
+    RUN_APP_ROLE="yes"
+fi
+if ask_yes_no "Configure this VM as the API/Django role?" "n"; then
+    RUN_API_ROLE="yes"
+fi
+if ask_yes_no "Configure this VM as the DB/MySQL role?" "n"; then
+    RUN_DB_ROLE="yes"
+fi
+if ask_yes_no "Configure this VM as the MQ/RabbitMQ role?" "n"; then
+    RUN_MQ_ROLE="yes"
+fi
+
+# A four-VM deployment assigns one responsibility to each machine. Refuse an
+# empty or combined selection so credentials and services cannot accidentally
+# leak into the wrong role VM.
+ROLE_COUNT=0
+for role_value in "$RUN_APP_ROLE" "$RUN_API_ROLE" "$RUN_DB_ROLE" "$RUN_MQ_ROLE"; do
+    if [ "$role_value" = "yes" ]; then
+        ROLE_COUNT=$((ROLE_COUNT + 1))
+    fi
+done
+if [ "$ROLE_COUNT" -ne 1 ]; then
+    echo "ERROR: Select yes for exactly one of APP, API, DB, or MQ on this VM." >&2
     exit 1
 fi
 
-# Export the prompted credentials so child setup scripts create/update the same
-# RabbitMQ user that this script writes into .env as RABBITMQ_URL.
-export MQ_USER="$RABBITMQ_USER"
-export MQ_PASSWORD="$RABBITMQ_PASSWORD"
+# APP-only VMs never request or store RabbitMQ credentials. API, DB, and MQ
+# roles require the same broker account to connect across the trusted network.
+RABBITMQ_USER=""
+RABBITMQ_PASSWORD=""
+if [ "$RUN_API_ROLE" = "yes" ] || [ "$RUN_DB_ROLE" = "yes" ] \
+  || [ "$RUN_MQ_ROLE" = "yes" ]; then
+    RABBITMQ_USER="$(prompt_with_default "Enter RabbitMQ username" "$DEFAULT_RABBITMQ_USER")"
+    RABBITMQ_PASSWORD="$(prompt_password_with_default "Enter RabbitMQ password" "")"
+    if [ -z "$RABBITMQ_PASSWORD" ]; then
+        echo "ERROR: RabbitMQ password cannot be empty and has no committed default."
+        exit 1
+    fi
+    export MQ_USER="$RABBITMQ_USER"
+    export MQ_PASSWORD="$RABBITMQ_PASSWORD"
+fi
 
-# Phase 2: install only the shared Python tooling and write MQ settings. Each
-# role setup script installs its own Python packages into this shared venv.
-if [ -f "manage.py" ] || [ -d "mq" ] || [ -d "api" ] || [ -d "db" ]; then
+# Child role scripts use these non-secret network values. The APP setup builds
+# its Nginx proxy and the API setup builds its Gunicorn listener from them.
+export APP_LISTEN_PORT="$APP_PORT"
+export API_HOST="$API_IP"
+export API_PORT
+export API_BIND_ADDRESS="0.0.0.0"
+
+# MySQL setup grants the API VM and the local DB consumer separately instead
+# of exposing the application account from every possible source address.
+if [ "$RUN_DB_ROLE" = "yes" ]; then
+    export DB_APP_HOST="$API_IP"
+    export DB_CONSUMER_HOST="localhost"
+fi
+
+# Phase 2: API and DB roles need Python before private URLs and Django settings
+# can be written. The MQ setup owns its own Python environment preparation.
+if [ "$RUN_API_ROLE" = "yes" ] || [ "$RUN_DB_ROLE" = "yes" ]; then
     # Role scripts install packages into this venv without global pip installs.
     sudo apt update
     sudo apt install -y python3 python3-pip python3-venv
     activate_python_venv
 
     update_project_env "$MQ_IP" "$RABBITMQ_PORT" "$RABBITMQ_USER" "$RABBITMQ_PASSWORD"
-    set_env_value "DJANGO_ALLOWED_HOSTS" "${API_IP},localhost,127.0.0.1"
-    set_env_value "CORS_ALLOWED_ORIGINS" "http://${APP_IP},http://${APP_IP}:${DJANGO_PORT}"
-fi
-
-# Phase 3: configure MySQL on checkouts that run the API backend or DB consumer.
-write_database_env_if_requested "$DB_IP" "$MYSQL_PORT" "$MQ_IP" "$RABBITMQ_PORT" "$RABBITMQ_USER" "$RABBITMQ_PASSWORD"
-
-if ask_yes_no "Configure a Geoapify API key for this Computer?(APP-API)" "n"; then
-    GEOAPIFY_API_KEY="$(prompt_password_with_default "Enter Geoapify API key" "")"
-    if [ -n "$GEOAPIFY_API_KEY" ]; then
-        set_env_value "GEOAPIFY_API_KEY" "$GEOAPIFY_API_KEY"
+    if [ "$RUN_API_ROLE" = "yes" ]; then
+        set_env_value "DJANGO_ALLOWED_HOSTS" "${API_IP},localhost,127.0.0.1"
+        set_env_value "CORS_ALLOWED_ORIGINS" "http://${APP_IP},http://${APP_IP}:${APP_PORT}"
+        set_env_value "CSRF_TRUSTED_ORIGINS" "http://${APP_IP},http://${APP_IP}:${APP_PORT}"
     fi
 fi
 
-# Update frontend runtime config only when frontend files are present.
-update_frontend_config_if_present "$API_IP" "$DJANGO_PORT"
+# Phase 3: configure MySQL on checkouts that run the API backend or DB consumer.
+if [ "$RUN_API_ROLE" = "yes" ] || [ "$RUN_DB_ROLE" = "yes" ]; then
+    write_database_env_if_requested \
+        "$DB_IP" "$MYSQL_PORT" "$MQ_IP" "$RABBITMQ_PORT" \
+        "$RABBITMQ_USER" "$RABBITMQ_PASSWORD" "$RUN_DB_ROLE"
+fi
+
+# Update frontend runtime config only when frontend files are present. The
+# Geoapify key prompt belongs only to api/setup_api.sh on the API VM.
+if [ "$RUN_APP_ROLE" = "yes" ]; then
+    update_frontend_config_if_present
+fi
 
 # Phase 4: run role-specific setup scripts. In a multi-VM deployment, each VM
 # normally runs only the setup script for its role.
 # Run role-specific setup scripts after ZeroTier is ready and .env has service IPs.
-run_script_if_requested "App/Django dependencies" "app/app_setup.sh"
-run_script_if_requested "API dependencies" "api/setup_api.sh"
-run_script_if_requested "RabbitMQ/MQ setup and tests" "mq/setup-test_mq.sh"
-run_script_if_requested "MySQL schema and application user(DB)" "db/setup_mysql.sh"
+run_script_if_selected "APP frontend/Nginx proxy" "app/app_setup.sh" "$RUN_APP_ROLE"
+run_script_if_selected "API/Django service" "api/setup_api.sh" "$RUN_API_ROLE"
+run_script_if_selected "RabbitMQ/MQ setup and tests" "mq/setup-test_mq.sh" "$RUN_MQ_ROLE"
+run_script_if_selected "MySQL schema and application user" "db/setup_mysql.sh" "$RUN_DB_ROLE"
 
-# Ask what MySQL should bind to when this VM is the DB VM.
-MYSQL_BIND_IP="$(prompt_with_default "Enter MySQL bind-address for the DB VM" "$DB_IP")"
+# Ask what MySQL should bind to only on the selected DB VM.
+if [ "$RUN_DB_ROLE" = "yes" ]; then
+    MYSQL_BIND_IP="$(prompt_with_default "Enter MySQL bind-address for the DB VM" "$DB_IP")"
+fi
 
 print_detection_summary
 
 # Phase 5: if this VM actually hosts MySQL or RabbitMQ, open those services to
 # the ZeroTier interface so the other VMs can connect.
 # Update service listener configs after optional installs so detection sees new services.
-update_mysql_if_installed "$MYSQL_BIND_IP"
-update_rabbitmq_if_installed "$RABBITMQ_USER" "$RABBITMQ_PASSWORD"
+if [ "$RUN_DB_ROLE" = "yes" ]; then
+    update_mysql_if_installed "$MYSQL_BIND_IP"
+    # MySQL has just changed listeners; reconnect the supervised local auth
+    # consumer immediately instead of waiting for its restart backoff.
+    if service_exists dreamescapes-db-consumer.service; then
+        sudo systemctl restart dreamescapes-db-consumer.service
+        if ! sudo systemctl is-active --quiet dreamescapes-db-consumer.service; then
+            warn_yellow \
+                "DB consumer is installed but not active. Verify db/.env, RabbitMQ connectivity, and MySQL credentials."
+        fi
+    fi
+fi
+if [ "$RUN_MQ_ROLE" = "yes" ]; then
+    update_rabbitmq_if_installed "$RABBITMQ_USER" "$RABBITMQ_PASSWORD"
+fi
 
 echo "ZeroTier network status:"
 if command_exists zerotier-cli; then
@@ -535,6 +619,8 @@ else
     echo "ZeroTier CLI is not installed; skipping network status."
 fi
 
-test_rabbitmq_url_at_end
+if [ "$RUN_API_ROLE" = "yes" ] || [ "$RUN_DB_ROLE" = "yes" ]; then
+    test_rabbitmq_url_at_end
+fi
 
 echo "Dependency and networking setup complete."

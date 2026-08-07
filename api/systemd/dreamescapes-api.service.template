@@ -1,0 +1,21 @@
+# Dedicated API VM process. The APP VM reaches this service through Nginx.
+[Unit]
+Description=DreamEscapes Django API
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_GROUP__
+WorkingDirectory=__REPO_ROOT__
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=__REPO_ROOT__:__REPO_ROOT__/app
+ExecStart=__REPO_ROOT__/venv/bin/gunicorn --workers __API_WORKERS__ --timeout 60 --bind __API_BIND_ADDRESS__:__API_PORT__ --access-logfile - --error-logfile - backend.wsgi:application
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

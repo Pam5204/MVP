@@ -1,0 +1,22 @@
+# Dedicated DB VM authentication consumer. Registration and login commands
+# arrive through RabbitMQ; this is the only process that verifies passwords.
+[Unit]
+Description=DreamEscapes DB authentication consumer
+Wants=network-online.target
+After=network-online.target mysql.service
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_GROUP__
+WorkingDirectory=__REPO_ROOT__
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=__REPO_ROOT__
+ExecStart=__REPO_ROOT__/venv/bin/python -m db.auth_consumer
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
