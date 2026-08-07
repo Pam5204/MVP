@@ -5,7 +5,10 @@ from django.contrib import admin
 from backend.models import (
     AdminAuditLog,
     BucketListDestination,
+    CommunityPost,
     DestinationCache,
+    DestinationReference,
+    DestinationReview,
     SearchHistory,
     UserAccount,
 )
@@ -21,5 +24,8 @@ class UserAccountAdmin(admin.ModelAdmin):
 
 admin.site.register(BucketListDestination)
 admin.site.register(DestinationCache)
+admin.site.register(DestinationReference)
+admin.site.register(DestinationReview)
+admin.site.register(CommunityPost)
 admin.site.register(SearchHistory)
 admin.site.register(AdminAuditLog)

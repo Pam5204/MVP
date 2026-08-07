@@ -7,9 +7,11 @@ const assert = require("node:assert/strict");
 const {
   buildSearchQuery,
   cacheMessage,
+  communityPostError,
   destinationToBucketPayload,
   escapeHtml,
   isExpiredSessionError,
+  reviewError,
   registrationError
 } = require("../logic.js");
 
@@ -49,6 +51,40 @@ test("registration validation covers missing and mismatched fields", () => {
       email: "alex@example.com",
       password: "long-enough",
       confirmPassword: "long-enough"
+    }),
+    ""
+  );
+});
+
+test("review validation requires a comment and a whole 1-5 rating", () => {
+  assert.equal(reviewError({ comment: "", rating: "5" }), "Review comment is required.");
+  assert.equal(
+    reviewError({ comment: "Great destination", rating: "6" }),
+    "Rating must be a whole number from 1 to 5."
+  );
+  assert.equal(reviewError({ comment: "Great destination", rating: "5" }), "");
+});
+
+test("community post validation covers required text and picture URL", () => {
+  assert.equal(
+    communityPostError({ post_type: "experience", title: "Hi", body: "Long enough body" }),
+    "Post title must be at least 3 characters."
+  );
+  assert.equal(
+    communityPostError({
+      post_type: "question",
+      title: "Beach advice",
+      body: "Which beach is closest?",
+      picture_url: "javascript:alert(1)"
+    }),
+    "Picture URL must be a valid HTTP or HTTPS address."
+  );
+  assert.equal(
+    communityPostError({
+      post_type: "experience",
+      title: "Newark trip",
+      body: "We had a wonderful visit.",
+      picture_url: "https://example.com/trip.jpg"
     }),
     ""
   );

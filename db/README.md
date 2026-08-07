@@ -5,7 +5,7 @@ seed data, database assertions, and the DB-role authentication consumer.
 
 ## Files
 
-- `DreamEscapes.sql` creates the database, five required tables, indexes,
+- `DreamEscapes.sql` creates the database, required tables, indexes,
   foreign keys, uniqueness rules, and all checklist procedures.
 - `setup_mysql.sh` installs and starts MySQL, prepares the DB-consumer Python
   and Django migration dependencies, creates/updates the application DB user
@@ -14,7 +14,8 @@ seed data, database assertions, and the DB-role authentication consumer.
 - `seed_data.sql` provides one user and one administrator with valid bcrypt
   hashes for local demonstrations.
 - `test_schema.sql` runs rollback-safe assertions for users, duplicate email,
-  bucket ownership/duplicates, cache freshness/expiry, history, and audit data.
+  bucket ownership/duplicates, cache freshness/expiry, reviews/ratings,
+  community posts, history, and audit data.
 - `auth_consumer.py` uses mysqlclient to process registration/login commands
   from RabbitMQ on the DB VM and never returns or logs password material.
 - `systemd/dreamescapes-db-consumer.service.template` keeps that consumer
@@ -57,5 +58,5 @@ sudo systemctl status dreamescapes-db-consumer --no-pager
 The Django backend always uses MySQL. Configure the `DB_*` variables from
 `db.env.example` for local development, tests, and deployment. The setup
 script runs `migrate --fake-initial` as the MySQL administrator: Django creates
-its own framework tables while recognizing the five application tables that
+its own framework tables while recognizing the application tables that
 `DreamEscapes.sql` already created.

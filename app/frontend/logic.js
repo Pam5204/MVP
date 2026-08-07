@@ -30,6 +30,34 @@
     return "";
   }
 
+  // Validate the required comment and 1-5 whole-number rating client-side.
+  function reviewError(values) {
+    const rating = Number(values.rating);
+    if (!String(values.comment || "").trim()) return "Review comment is required.";
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return "Rating must be a whole number from 1 to 5.";
+    }
+    return "";
+  }
+
+  // Mirror the required community fields before making a network request.
+  function communityPostError(values) {
+    if (!["experience", "question"].includes(String(values.post_type || ""))) {
+      return "Choose a travel experience or question post type.";
+    }
+    if (String(values.title || "").trim().length < 3) {
+      return "Post title must be at least 3 characters."
+    }
+    if (String(values.body || "").trim().length < 10) {
+      return "Post text must be at least 10 characters."
+    }
+    const pictureUrl = String(values.picture_url || "").trim();
+    if (pictureUrl && !/^https?:\/\/[^\s]+$/i.test(pictureUrl)) {
+      return "Picture URL must be a valid HTTP or HTTPS address."
+    }
+    return "";
+  }
+
   // Translate backend cache state into a short message for the search UI.
   function cacheMessage(status, warning) {
     if (warning) return warning;
@@ -72,9 +100,11 @@
   return {
     buildSearchQuery,
     cacheMessage,
+    communityPostError,
     destinationToBucketPayload,
     escapeHtml,
     isExpiredSessionError,
+    reviewError,
     registrationError
   };
 }));

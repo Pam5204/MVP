@@ -4,11 +4,15 @@ import argparse
 import json
 
 from mq.config import QUEUE_BINDINGS
-from mq.rabbitmq import consume_bad_messages, consume_event_queue
+from mq.rabbitmq import (
+    consume_bad_messages,
+    consume_central_logs,
+    consume_event_queue,
+)
 
 
 def main():
-    choices = ["bad", *sorted(QUEUE_BINDINGS)]
+    choices = ["bad", "central", *sorted(QUEUE_BINDINGS)]
     parser = argparse.ArgumentParser(description="Consume DreamEscapes MQ messages.")
     parser.add_argument(
         "queue",
@@ -18,6 +22,9 @@ def main():
     args = parser.parse_args()
     if args.queue == "bad":
         consume_bad_messages()
+        return
+    if args.queue == "central":
+        consume_central_logs()
         return
     consume_event_queue(
         args.queue,

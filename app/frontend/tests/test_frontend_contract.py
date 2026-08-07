@@ -18,11 +18,15 @@ class FrontendContractTests(unittest.TestCase):
             "dashboardView",
             "detailsView",
             "bucketView",
+            "communityView",
             "profileView",
             "adminView",
             "loginForm",
             "registerForm",
             "searchForm",
+            "reviewForm",
+            "communityPostForm",
+            "communitySearchForm",
             "profileForm",
         ):
             self.assertIn(f'id="{identifier}"', HTML)
@@ -34,7 +38,9 @@ class FrontendContractTests(unittest.TestCase):
             "/api/logout",
             "/api/profile",
             "/api/destinations/search",
+            "/reviews",
             "/api/bucket-list",
+            "/api/community/posts",
             "/api/admin/users",
             "/api/admin/destinations",
             "/api/admin/audit-logs",
@@ -68,6 +74,19 @@ class FrontendContractTests(unittest.TestCase):
             'button.closest(".table-row[data-user-id]")',
             JAVASCRIPT,
         )
+
+    def test_required_final_feature_controls_are_api_backed(self):
+        for required in (
+            'name="rating"',
+            'name="comment"',
+            'name="post_type"',
+            'name="picture_url"',
+            'id="communityPostList"',
+        ):
+            self.assertIn(required, HTML)
+        self.assertIn("community-moderate", JAVASCRIPT)
+        self.assertIn("encodeURIComponent(state.communityQuery)", JAVASCRIPT)
+        self.assertIn("community-picture", JAVASCRIPT)
         self.assertNotIn(
             'class="ghost-button admin-user-save" type="button" data-user-id=',
             JAVASCRIPT,

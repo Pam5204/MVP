@@ -136,7 +136,7 @@ case "${LOAD_SEED_DATA,,}" in
     ;;
 esac
 
-# The SQL schema owns the five DreamEscapes application tables. When the App
+# The SQL schema owns the DreamEscapes application tables. When the App
 # runtime is ready, apply Django's framework migrations and fake only the
 # matching initial backend migration. This creates Django's
 # admin/auth/content-type tables and records the existing application schema,

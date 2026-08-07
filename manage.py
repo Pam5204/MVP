@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Django command runner for the centralized-logging milestone."""
+"""Django command runner for the DreamEscapes application."""
 
 import os
 import sys

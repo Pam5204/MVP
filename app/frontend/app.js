@@ -21,9 +21,11 @@ const SESSION_DURATION_MS = 30 * 60 * 1000;
 const {
   buildSearchQuery,
   cacheMessage,
+  communityPostError,
   destinationToBucketPayload,
   escapeHtml,
   isExpiredSessionError,
+  reviewError,
   registrationError
 } = window.DreamEscapesLogic;
 
@@ -41,7 +43,10 @@ const state = {
   session: loadSession(),
   destinations: [],
   selectedDestination: null,
+  destinationReviews: [],
   bucketList: [],
+  communityPosts: [],
+  communityQuery: "",
   adminUsers: [],
   adminDestinations: [],
   adminAudit: []
@@ -54,11 +59,12 @@ const views = {
   dashboard: document.querySelector("#dashboardView"),
   details: document.querySelector("#detailsView"),
   bucket: document.querySelector("#bucketView"),
+  community: document.querySelector("#communityView"),
   profile: document.querySelector("#profileView"),
   admin: document.querySelector("#adminView")
 };
 
-const protectedRoutes = new Set(["dashboard", "details", "bucket", "profile"]);
+const protectedRoutes = new Set(["dashboard", "details", "bucket", "community", "profile"]);
 const sessionStatus = document.querySelector("#sessionStatus");
 const globalMessage = document.querySelector("#globalMessage");
 const destinationGrid = document.querySelector("#destinationGrid");
@@ -66,6 +72,8 @@ const destinationDetails = document.querySelector("#destinationDetails");
 const nearbyAttractions = document.querySelector("#nearbyAttractions");
 const pointsOfInterest = document.querySelector("#pointsOfInterest");
 const bucketListContainer = document.querySelector("#bucketList");
+const destinationReviews = document.querySelector("#destinationReviews");
+const communityPostList = document.querySelector("#communityPostList");
 const searchStatus = document.querySelector("#searchStatus");
 const bucketStatus = document.querySelector("#bucketStatus");
 
@@ -100,6 +108,8 @@ function saveSession(user) {
 function clearSession() {
   state.session = null;
   state.bucketList = [];
+  state.destinationReviews = [];
+  state.communityPosts = [];
   localStorage.removeItem(SESSION_STORAGE_KEY);
   sessionStorage.removeItem(SELECTED_PLACE_KEY);
   updateAuthUI();
@@ -237,6 +247,7 @@ async function setRoute(route) {
   if (location.hash !== `#${route}`) history.replaceState(null, "", `#${route}`);
   if (route === "profile") await loadProfile();
   if (route === "bucket") await loadBucketList();
+  if (route === "community") await loadCommunityPosts();
   if (route === "details") await loadDestinationDetails();
   if (route === "admin") await loadAdminDashboard();
 }
@@ -307,6 +318,8 @@ async function loadDestinationDetails() {
   setBusy("detailsLoading", true);
   setMessage("detailsStatus", "Loading…");
   destinationDetails.innerHTML = "";
+  destinationReviews.innerHTML = "";
+  setMessage("reviewMessage");
   nearbyAttractions.innerHTML = "";
   pointsOfInterest.innerHTML = "";
   try {
@@ -327,6 +340,7 @@ async function loadDestinationDetails() {
       <button class="primary-button detail-save-button" type="button">Save to bucket list</button>`;
     renderInfoList(nearbyAttractions, destination.nearby_attractions, "No nearby attractions were returned.");
     renderInfoList(pointsOfInterest, destination.points_of_interest, "No points of interest were returned.");
+    await loadDestinationReviews(destination.place_id);
     const cacheText = cacheMessage(result.cache_status, result.cache_warning);
     setMessage(
       "detailsStatus",
@@ -338,6 +352,37 @@ async function loadDestinationDetails() {
   } finally {
     setBusy("detailsLoading", false);
   }
+}
+
+async function loadDestinationReviews(placeId) {
+  setBusy("reviewsLoading", true);
+  try {
+    const result = await apiRequest(
+      `/api/destinations/${encodeURIComponent(placeId)}/reviews`
+    );
+    state.destinationReviews = result.reviews || [];
+    renderDestinationReviews();
+  } catch (error) {
+    state.destinationReviews = [];
+    destinationReviews.innerHTML = "";
+    handleApiError(error, document.querySelector("#reviewMessage"));
+  } finally {
+    setBusy("reviewsLoading", false);
+  }
+}
+
+function renderDestinationReviews() {
+  destinationReviews.innerHTML = state.destinationReviews.length
+    ? state.destinationReviews.map((review) => `
+      <article class="review-card">
+        <div class="review-heading">
+          <strong>${escapeHtml(review.username)}</strong>
+          <span class="rating-badge">${escapeHtml(review.rating)}/5</span>
+        </div>
+        <p>${escapeHtml(review.comment)}</p>
+        <small>${escapeHtml(review.created_at)}</small>
+      </article>`).join("")
+    : '<p class="empty-state">No reviews yet. Be the first traveler to add one.</p>';
 }
 
 function renderInfoList(container, items = [], emptyMessage) {
@@ -404,6 +449,93 @@ function renderBucketList() {
         </form>
       </article>`).join("")
     : '<p class="empty-state">Save a destination from search or details to begin your bucket list.</p>';
+}
+
+// Required community discussion loading, search, rendering, and controls.
+async function loadCommunityPosts(query = state.communityQuery) {
+  state.communityQuery = String(query || "").trim();
+  setBusy("communityLoading", true);
+  setMessage("communityStatus", state.communityQuery ? "Searching posts..." : "Loading posts...");
+  try {
+    const suffix = state.communityQuery
+      ? `?q=${encodeURIComponent(state.communityQuery)}`
+      : "";
+    const result = await apiRequest(`/api/community/posts${suffix}`);
+    state.communityPosts = result.posts || [];
+    renderCommunityPosts();
+    const label = state.communityQuery ? ` matching "${state.communityQuery}"` : "";
+    setMessage(
+      "communityStatus",
+      `${result.count} community post${result.count === 1 ? "" : "s"}${label}.`,
+      "success"
+    );
+  } catch (error) {
+    state.communityPosts = [];
+    renderCommunityPosts();
+    handleApiError(error, document.querySelector("#communityStatus"));
+  } finally {
+    setBusy("communityLoading", false);
+  }
+}
+
+function communityEditForm(post) {
+  if (!post.can_edit) return "";
+  return `
+    <form class="community-edit-form" data-post-id="${post.post_id}" hidden>
+      <label>Post type
+        <select name="post_type">
+          <option value="experience" ${post.post_type === "experience" ? "selected" : ""}>Travel experience</option>
+          <option value="question" ${post.post_type === "question" ? "selected" : ""}>Question</option>
+        </select>
+      </label>
+      <label>Title
+        <input name="title" maxlength="160" value="${escapeHtml(post.title)}" required>
+      </label>
+      <label>Post text
+        <textarea name="body" rows="5" maxlength="5000" required>${escapeHtml(post.body)}</textarea>
+      </label>
+      <label>Destination
+        <input name="destination_name" maxlength="255" value="${escapeHtml(post.destination_name || "")}">
+      </label>
+      <label>Picture URL
+        <input type="url" name="picture_url" maxlength="1000" value="${escapeHtml(post.picture_url || "")}">
+      </label>
+      <div class="card-actions">
+        <button class="primary-button" type="submit">Save changes</button>
+        <button class="ghost-button community-edit-cancel" type="button">Cancel</button>
+      </div>
+    </form>`;
+}
+
+function renderCommunityPosts() {
+  communityPostList.innerHTML = state.communityPosts.length
+    ? state.communityPosts.map((post) => `
+      <article class="community-post ${post.moderation_status === "hidden" ? "is-moderated" : ""}" data-post-id="${post.post_id}">
+        <div class="community-post-heading">
+          <div>
+            <span class="post-type">${escapeHtml(post.post_type)}</span>
+            <h3>${escapeHtml(post.title)}</h3>
+          </div>
+          ${post.moderation_status === "hidden" ? '<span class="moderation-badge">Hidden</span>' : ""}
+        </div>
+        <p class="post-meta">By ${escapeHtml(post.author_username)}${post.destination_name ? ` · ${escapeHtml(post.destination_name)}` : ""}</p>
+        <p class="community-post-body">${escapeHtml(post.body)}</p>
+        ${post.picture_url ? `
+          <a href="${escapeHtml(post.picture_url)}" target="_blank" rel="noopener noreferrer">
+            <img class="community-picture" src="${escapeHtml(post.picture_url)}" alt="Picture shared with ${escapeHtml(post.title)}" loading="lazy" referrerpolicy="no-referrer">
+          </a>` : ""}
+        <p class="post-meta">Updated ${escapeHtml(post.updated_at)}</p>
+        <div class="card-actions community-actions">
+          ${post.can_edit ? '<button class="ghost-button community-edit-toggle" type="button">Edit</button>' : ""}
+          ${post.can_delete ? '<button class="ghost-button community-delete" type="button">Delete</button>' : ""}
+          ${post.can_moderate ? `
+            <button class="ghost-button community-moderate" type="button" data-status="${post.moderation_status === "hidden" ? "visible" : "hidden"}">
+              ${post.moderation_status === "hidden" ? "Restore" : "Hide"}
+            </button>` : ""}
+        </div>
+        ${communityEditForm(post)}
+      </article>`).join("")
+    : '<p class="empty-state">No community posts matched your search.</p>';
 }
 
 // Profile and administrator data loaders and renderers.
@@ -588,6 +720,50 @@ destinationDetails.addEventListener("click", async (event) => {
   }
 });
 
+document.querySelector("#reviewForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = Object.fromEntries(new FormData(form).entries());
+  const validationMessage = reviewError(values);
+  if (validationMessage) {
+    setMessage("reviewMessage", validationMessage, "error");
+    return;
+  }
+  const destination = state.selectedDestination;
+  if (!destination?.place_id) {
+    setMessage("reviewMessage", "Load a destination before submitting a review.", "error");
+    return;
+  }
+  setMessage("reviewMessage", "Submitting review...");
+  try {
+    const result = await apiRequest(
+      `/api/destinations/${encodeURIComponent(destination.place_id)}/reviews`,
+      {
+        method: "POST",
+        body: {
+          place_id: destination.place_id,
+          destination_name: destination.name,
+          city: destination.city || "",
+          country: destination.country || "",
+          formatted_address: destination.formatted_address || "",
+          comment: values.comment.trim(),
+          rating: Number(values.rating)
+        }
+      }
+    );
+    state.destinationReviews.unshift(result.review);
+    renderDestinationReviews();
+    form.reset();
+    setMessage(
+      "reviewMessage",
+      `${result.message} Evidence ID: ${result.correlation_id}`,
+      "success"
+    );
+  } catch (error) {
+    handleApiError(error, document.querySelector("#reviewMessage"));
+  }
+});
+
 bucketListContainer.addEventListener("submit", async (event) => {
   const form = event.target.closest(".bucket-edit-form");
   if (!form) return;
@@ -623,6 +799,130 @@ bucketListContainer.addEventListener("click", async (event) => {
     setMessage(bucketStatus, result.message, "success");
   } catch (error) {
     handleApiError(error, bucketStatus);
+  }
+});
+
+document.querySelector("#communityPostForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = Object.fromEntries(new FormData(form).entries());
+  const validationMessage = communityPostError(values);
+  if (validationMessage) {
+    setMessage("communityFormMessage", validationMessage, "error");
+    return;
+  }
+  setMessage("communityFormMessage", "Publishing post...");
+  try {
+    const result = await apiRequest("/api/community/posts", {
+      method: "POST",
+      body: {
+        post_type: values.post_type,
+        title: values.title.trim(),
+        body: values.body.trim(),
+        destination_name: values.destination_name.trim(),
+        picture_url: values.picture_url.trim()
+      }
+    });
+    form.reset();
+    state.communityQuery = "";
+    document.querySelector("#communitySearchForm").reset();
+    await loadCommunityPosts();
+    setMessage(
+      "communityFormMessage",
+      `${result.message} Evidence ID: ${result.correlation_id}`,
+      "success"
+    );
+  } catch (error) {
+    handleApiError(error, document.querySelector("#communityFormMessage"));
+  }
+});
+
+document.querySelector("#communitySearchForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await loadCommunityPosts(event.currentTarget.elements.q.value);
+});
+
+document.querySelector("#communityClearSearch").addEventListener("click", async () => {
+  document.querySelector("#communitySearchForm").reset();
+  await loadCommunityPosts("");
+});
+
+communityPostList.addEventListener("submit", async (event) => {
+  const form = event.target.closest(".community-edit-form");
+  if (!form) return;
+  event.preventDefault();
+  const values = Object.fromEntries(new FormData(form).entries());
+  const validationMessage = communityPostError(values);
+  if (validationMessage) {
+    setMessage("communityStatus", validationMessage, "error");
+    return;
+  }
+  try {
+    const result = await apiRequest(`/api/community/posts/${Number(form.dataset.postId)}`, {
+      method: "PUT",
+      body: {
+        post_type: values.post_type,
+        title: values.title.trim(),
+        body: values.body.trim(),
+        destination_name: values.destination_name.trim(),
+        picture_url: values.picture_url.trim()
+      }
+    });
+    await loadCommunityPosts();
+    setMessage(
+      "communityStatus",
+      `${result.message} Evidence ID: ${result.correlation_id}`,
+      "success"
+    );
+  } catch (error) {
+    handleApiError(error, document.querySelector("#communityStatus"));
+  }
+});
+
+communityPostList.addEventListener("click", async (event) => {
+  const card = event.target.closest(".community-post[data-post-id]");
+  if (!card) return;
+  const postId = Number(card.dataset.postId);
+  if (event.target.closest(".community-edit-toggle")) {
+    card.querySelector(".community-edit-form").hidden = false;
+    return;
+  }
+  if (event.target.closest(".community-edit-cancel")) {
+    card.querySelector(".community-edit-form").hidden = true;
+    return;
+  }
+  if (event.target.closest(".community-delete")) {
+    try {
+      const result = await apiRequest(`/api/community/posts/${postId}`, {
+        method: "DELETE"
+      });
+      await loadCommunityPosts();
+      setMessage(
+        "communityStatus",
+        `${result.message} Evidence ID: ${result.correlation_id}`,
+        "success"
+      );
+    } catch (error) {
+      handleApiError(error, document.querySelector("#communityStatus"));
+    }
+    return;
+  }
+  const moderationButton = event.target.closest(".community-moderate");
+  if (moderationButton) {
+    try {
+      const result = await apiRequest(`/api/community/posts/${postId}/moderation`, {
+        method: "PUT",
+        body: { moderation_status: moderationButton.dataset.status }
+      });
+      await loadCommunityPosts();
+      setMessage(
+        "communityStatus",
+        `${result.message} Evidence ID: ${result.correlation_id}`,
+        "success"
+      );
+    } catch (error) {
+      handleApiError(error, document.querySelector("#communityStatus"));
+    }
   }
 });
 

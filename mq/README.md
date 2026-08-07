@@ -15,7 +15,7 @@ All exchanges and queues are durable. Every canonical application queue has
 | `bucketlist.exchange` | topic | Bucket-list lifecycle events |
 | `cache.exchange` | topic | Cache refresh/status and upstream API failures |
 | `admin.exchange` | topic | Admin actions and audit events |
-| `log.exchange` | topic | Reserved project logging exchange |
+| `log.exchange` | topic | Required review/community final-feature events |
 | `error.exchange` | direct | Rejected, malformed, and dead-lettered messages |
 
 | Queue | Exchange | Binding(s) |
@@ -26,12 +26,14 @@ All exchanges and queues are durable. Every canonical application queue has
 | `cache.refresh.queue` | `cache.exchange` | `cache.#` |
 | `api.failure.queue` | `cache.exchange` | `api.#` |
 | `admin.audit.queue` | `admin.exchange` | `admin.#` |
+| `central.log.queue` | `log.exchange` | `review.#`, `community.#` |
 | `project.error.queue` | `error.exchange` | `error.message` |
 
 The full event catalog lives in `mq.config.SUPPORTED_EVENT_TYPES`. It includes
 all required checklist routes plus logout/security, duplicate-save rejection,
-cache completion/destination/stale-cache, Geoapify-unavailable, destination
-review, and unauthorized-admin events.
+cache completion/destination/stale-cache, Geoapify-unavailable, administrator
+cache review, unauthorized-admin, destination-review submission, and required
+community CRUD/moderation events.
 
 The durable `auth.request.db.queue` and `auth.error.queue` form the private
 authentication command boundary used by the App and DB services. Each
@@ -92,6 +94,7 @@ Consume a canonical queue for monitoring or future processing:
 ```bash
 python -m mq.listener bucketlist.events.queue
 python -m mq.listener cache.refresh.queue
+python -m mq.listener central
 python -m mq.listener bad
 ```
 
@@ -127,7 +130,9 @@ secrets. Do not use the remote `guest` account.
 
 The single setup script installs/starts RabbitMQ, creates or updates the user
 and vhost permissions, and declares all exchanges, queues, bindings, and
-dead-letter settings. During an upgrade, it also deletes the retired
+dead-letter settings. It installs `dreamescapes-mq-logger.service`, which
+consumes `central.log.queue` and appends validated events to
+`/var/log/dreamescapes/final_features.jsonl`. During an upgrade, it also deletes the retired
 `auth.response.app.queue`, including any obsolete messages still in that
 queue. It then asks two independent questions:
 
@@ -149,6 +154,8 @@ For lightweight broker monitoring on the MQ VM:
 ```bash
 sudo rabbitmqctl list_exchanges name type durable
 sudo rabbitmqctl list_queues name messages consumers
+sudo systemctl status dreamescapes-mq-logger --no-pager
+sudo tail -n 20 /var/log/dreamescapes/final_features.jsonl
 ```
 
 ## Local tests

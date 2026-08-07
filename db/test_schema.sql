@@ -10,6 +10,9 @@ BEGIN
   DECLARE v_user_id BIGINT UNSIGNED;
   DECLARE v_other_user_id BIGINT UNSIGNED;
   DECLARE v_bucket_id BIGINT UNSIGNED;
+  DECLARE v_destination_id BIGINT UNSIGNED;
+  DECLARE v_review_id BIGINT UNSIGNED;
+  DECLARE v_post_id BIGINT UNSIGNED;
   DECLARE v_duplicate_rejected BOOLEAN DEFAULT FALSE;
   DECLARE v_count INT DEFAULT 0;
 
@@ -114,6 +117,38 @@ BEGIN
   WHERE admin_user_id = v_user_id;
   IF v_count <> 1 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Admin audit was not saved';
+  END IF;
+
+  INSERT INTO destinations (
+    place_id, destination_name, city, country, formatted_address
+  ) VALUES (
+    CONCAT('schema-review-place-', UUID()), 'Review Destination', 'Newark',
+    'United States', 'Newark, NJ'
+  );
+  SET v_destination_id = LAST_INSERT_ID();
+  INSERT INTO destination_reviews (user_id, destination_id, comment, rating)
+  VALUES (v_user_id, v_destination_id, 'A persisted schema review.', 5);
+  SET v_review_id = LAST_INSERT_ID();
+  SELECT COUNT(*) INTO v_count FROM destination_reviews
+  WHERE review_id = v_review_id AND user_id = v_user_id
+    AND destination_id = v_destination_id AND rating = 5;
+  IF v_count <> 1 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Destination review was not saved';
+  END IF;
+
+  INSERT INTO community_posts (
+    author_user_id, post_type, title, body, destination_name, picture_url
+  ) VALUES (
+    v_user_id, 'experience', 'Schema community post',
+    'This is persisted community post text for the schema test.',
+    'Newark', 'https://example.com/newark.jpg'
+  );
+  SET v_post_id = LAST_INSERT_ID();
+  SELECT COUNT(*) INTO v_count FROM community_posts
+  WHERE post_id = v_post_id AND author_user_id = v_user_id
+    AND body LIKE '%community post text%';
+  IF v_count <> 1 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Community post was not saved';
   END IF;
 
   SELECT 'All DreamEscapes database assertions passed.' AS result;

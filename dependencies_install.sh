@@ -157,6 +157,8 @@ update_project_env() {
     echo "Updating ${ENV_FILE} with RabbitMQ/auth settings only..."
     set_env_value "RABBITMQ_URL" "$rabbitmq_url"
     set_env_value "LOG_EXCHANGE" "log.exchange"
+    set_env_value "CENTRAL_LOG_QUEUE" "central.log.queue"
+    set_env_value "CENTRAL_LOG_FILE" "/var/log/dreamescapes/final_features.jsonl"
     set_env_value "ERROR_EXCHANGE" "error.exchange"
     set_env_value "ERROR_QUEUE" "project.error.queue"
     set_env_value "AUTH_EXCHANGE" "auth.exchange"

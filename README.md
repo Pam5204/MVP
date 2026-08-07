@@ -2,8 +2,9 @@
 
 DreamEscapes is a responsive destination-search application with account and
 profile management, Geoapify search/details, a 24-hour DB-first cache,
-ownership-protected bucket lists, an administrator dashboard, MySQL storage,
-and RabbitMQ domain events/dead-letter handling.
+ownership-protected bucket lists, persisted destination reviews and ratings,
+a searchable community discussion board, administrator moderation, MySQL
+storage, and RabbitMQ centralized final-feature logging/dead-letter handling.
 
 ## Project structure
 
@@ -57,6 +58,10 @@ node --test app/frontend/tests/logic.test.js
 python -m unittest discover -s db/tests -v
 python manage.py check --deploy
 ```
+
+The final-feature MQ evidence file is append-only JSON Lines on the MQ VM:
+`/var/log/dreamescapes/final_features.jsonl`. Review and community API mutation
+responses return the matching `correlation_id` used in that log.
 
 Deployment/setup details live in:
 

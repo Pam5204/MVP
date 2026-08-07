@@ -31,21 +31,38 @@ from backend.services.bucket_list_service import (
     save_bucket_list_item,
     update_bucket_list_item,
 )
+from backend.services.community_service import (
+    create_community_post,
+    delete_community_post,
+    get_community_post,
+    list_community_posts,
+    moderate_community_post,
+    update_community_post,
+)
 from backend.services.destination_service import (
     get_destination_details,
     recent_searches,
     search_destinations,
 )
 from backend.services.errors import ServiceError
+from backend.services.review_service import (
+    list_destination_reviews,
+    submit_destination_review,
+)
 
 
 def _correlation_id(request):
     """Use an inbound trace ID when present, otherwise create one."""
-    return (
+    existing = getattr(request, "_dream_correlation_id", None)
+    if existing:
+        return existing
+    correlation_id = (
         request.headers.get("X-Correlation-ID")
         or request.headers.get("X-Request-ID")
         or str(uuid4())
     )
+    request._dream_correlation_id = correlation_id
+    return correlation_id
 
 
 def _service_errors(view):
@@ -53,36 +70,41 @@ def _service_errors(view):
 
     @wraps(view)
     def wrapped(request, *args, **kwargs):
+        correlation_id = _correlation_id(request)
         try:
-            return view(request, *args, **kwargs)
+            response = view(request, *args, **kwargs)
         except ServiceError as error:
-            return Response(
+            response = Response(
                 {
                     "success": False,
                     "error": error.message,
                     "error_code": error.code,
+                    "correlation_id": correlation_id,
                 },
                 status=error.status_code,
             )
         except TimeoutError:
-            return Response(
+            response = Response(
                 {
                     "success": False,
                     "error": "A required service did not respond in time.",
                     "error_code": "SERVICE_TIMEOUT",
+                    "correlation_id": correlation_id,
                 },
                 status=504,
             )
         except Exception:
-            return Response(
+            response = Response(
                 {
                     "success": False,
                     "error": "The request could not be completed.",
                     "error_code": "INTERNAL_ERROR",
+                    "correlation_id": correlation_id,
                 },
                 status=500,
             )
-
+        response["X-Correlation-ID"] = correlation_id
+        return response
     return wrapped
 
 
@@ -255,6 +277,121 @@ def bucket_list_item(request, bucket_item_id):
             "success": True,
             "message": "Bucket-list item deleted successfully.",
             "deleted": result,
+        }
+    )
+
+
+@api_view(["GET", "POST"])
+@_service_errors
+def destination_reviews(request, place_id):
+    """List or submit authenticated user reviews for one destination."""
+    user = require_authenticated_user(request)
+    correlation_id = _correlation_id(request)
+    if request.method == "GET":
+        reviews = list_destination_reviews(place_id)
+        return Response(
+            {"success": True, "count": len(reviews), "reviews": reviews}
+        )
+    review = submit_destination_review(
+        user,
+        place_id,
+        request.data,
+        correlation_id=correlation_id,
+    )
+    return Response(
+        {
+            "success": True,
+            "message": "Review submitted successfully.",
+            "correlation_id": correlation_id,
+            "review": review,
+        },
+        status=201,
+    )
+
+
+@api_view(["GET", "POST"])
+@_service_errors
+def community_posts(request):
+    """Search/list posts or create one as the authenticated user."""
+    user = require_authenticated_user(request)
+    correlation_id = _correlation_id(request)
+    if request.method == "GET":
+        posts = list_community_posts(user, request.query_params.get("q", ""))
+        return Response({"success": True, "count": len(posts), "posts": posts})
+    post = create_community_post(
+        user,
+        request.data,
+        correlation_id=correlation_id,
+    )
+    return Response(
+        {
+            "success": True,
+            "message": "Community post created successfully.",
+            "correlation_id": correlation_id,
+            "post": post,
+        },
+        status=201,
+    )
+
+
+@api_view(["GET", "PUT", "PATCH", "DELETE"])
+@_service_errors
+def community_post_item(request, post_id):
+    """Retrieve or mutate one post under owner/administrator controls."""
+    user = require_authenticated_user(request)
+    correlation_id = _correlation_id(request)
+    if request.method == "GET":
+        return Response(
+            {"success": True, "post": get_community_post(user, post_id)}
+        )
+    if request.method in {"PUT", "PATCH"}:
+        post = update_community_post(
+            user,
+            post_id,
+            request.data,
+            correlation_id=correlation_id,
+        )
+        return Response(
+            {
+                "success": True,
+                "message": "Community post updated successfully.",
+                "correlation_id": correlation_id,
+                "post": post,
+            }
+        )
+    deleted = delete_community_post(
+        user,
+        post_id,
+        correlation_id=correlation_id,
+    )
+    return Response(
+        {
+            "success": True,
+            "message": "Community post deleted successfully.",
+            "correlation_id": correlation_id,
+            "deleted": deleted,
+        }
+    )
+
+
+@api_view(["PUT"])
+@_service_errors
+def community_post_moderation(request, post_id):
+    """Hide or restore one post as an administrator."""
+    admin = require_authenticated_user(request)
+    correlation_id = _correlation_id(request)
+    post = moderate_community_post(
+        admin,
+        post_id,
+        request.data.get("moderation_status", request.data.get("status")),
+        correlation_id=correlation_id,
+    )
+    return Response(
+        {
+            "success": True,
+            "message": "Community moderation status updated.",
+            "correlation_id": correlation_id,
+            "post": post,
         }
     )
 

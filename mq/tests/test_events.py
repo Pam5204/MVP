@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -11,16 +13,19 @@ from mq.config import (
     AUTH_EXCHANGE,
     BUCKETLIST_EXCHANGE,
     CACHE_EXCHANGE,
+    CENTRAL_LOG_QUEUE,
     ERROR_EXCHANGE,
     ERROR_QUEUE,
     ERROR_ROUTING_KEY,
     EVENT_EXCHANGES,
     EXCHANGE_TYPES,
+    LOG_EXCHANGE,
     QUEUE_BINDINGS,
     SUPPORTED_EVENT_TYPES,
 )
 from mq.rabbitmq import (
     build_event,
+    consume_central_logs,
     consume_event_queue,
     declare_project_topology,
     exchange_for_event,
@@ -47,6 +52,11 @@ REQUIRED_TODO_EVENTS = {
     "admin.user.role_changed",
     "admin.user.status_changed",
     "admin.audit.created",
+    "review.submitted",
+    "community.post.created",
+    "community.post.updated",
+    "community.post.deleted",
+    "community.post.moderated",
 }
 
 
@@ -147,6 +157,9 @@ class TopologyTests(unittest.TestCase):
         )
         self.assertEqual(CACHE_EXCHANGE, exchange_for_event("api.failure"))
         self.assertEqual(ADMIN_EXCHANGE, exchange_for_event("admin.audit.created"))
+        self.assertEqual(LOG_EXCHANGE, exchange_for_event("review.submitted"))
+        self.assertEqual(LOG_EXCHANGE, exchange_for_event("community.post.created"))
+        self.assertEqual(LOG_EXCHANGE, QUEUE_BINDINGS[CENTRAL_LOG_QUEUE].exchange)
 
     def test_topology_declares_canonical_queues_with_dlq_and_bindings(self):
         channel = MagicMock()
@@ -240,6 +253,27 @@ class PublisherConsumerTests(unittest.TestCase):
 
         channel.basic_nack.assert_called_once_with(delivery_tag=44, requeue=False)
         channel.basic_ack.assert_not_called()
+
+    @patch("mq.rabbitmq.consume_event_queue")
+    def test_central_logger_appends_validated_jsonl_with_correlation_id(self, consume):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            log_file = Path(temporary_directory) / "final_features.jsonl"
+            event = build_event(
+                "review.submitted",
+                "api",
+                {"message": "Destination review submitted"},
+                correlation_id="evidence-review-1",
+                review_id=7,
+            )
+            with patch("mq.rabbitmq.CENTRAL_LOG_FILE", str(log_file)):
+                consume_central_logs()
+                handler = consume.call_args.args[1]
+                handler(event)
+
+            written = json.loads(log_file.read_text(encoding="utf-8"))
+            self.assertEqual(written["event_id"], event["event_id"])
+            self.assertEqual(written["correlation_id"], "evidence-review-1")
+            self.assertEqual(written["event_type"], "review.submitted")
 
 
 class AuthResponseTests(unittest.TestCase):

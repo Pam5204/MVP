@@ -10,7 +10,10 @@ from django.utils import timezone
 from backend.models import (
     AdminAuditLog,
     BucketListDestination,
+    CommunityPost,
     DestinationCache,
+    DestinationReference,
+    DestinationReview,
     SearchHistory,
     UserAccount,
 )
@@ -482,6 +485,162 @@ class AdminApiTests(ApiTestBase):
         self.assertEqual(audit.status_code, 200)
         self.assertGreaterEqual(audit.json()["count"], 3)
         self.assertGreaterEqual(AdminAuditLog.objects.count(), 3)
+
+
+class DestinationReviewApiTests(ApiTestBase):
+    def setUp(self):
+        self.user = self.create_user()
+        self.login()
+        self.payload = {
+            "place_id": "place-review-final",
+            "destination_name": "Newark Museum of Art",
+            "city": "Newark",
+            "country": "United States",
+            "formatted_address": "49 Washington St, Newark, NJ",
+            "comment": "A thoughtful and useful destination review.",
+            "rating": 5,
+        }
+
+    @patch("backend.services.review_service.emit_event")
+    def test_authenticated_user_can_submit_and_view_persisted_review(self, emit):
+        response = self.client.post(
+            "/api/destinations/place-review-final/reviews",
+            self.payload,
+            content_type="application/json",
+            HTTP_X_CORRELATION_ID="final-review-evidence-1",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["review"]["rating"], 5)
+        self.assertEqual(response.json()["correlation_id"], "final-review-evidence-1")
+        self.assertEqual(response["X-Correlation-ID"], "final-review-evidence-1")
+        self.assertEqual(DestinationReference.objects.count(), 1)
+        self.assertEqual(DestinationReview.objects.count(), 1)
+
+        listing = self.client.get("/api/destinations/place-review-final/reviews")
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.json()["count"], 1)
+        self.assertEqual(listing.json()["reviews"][0]["comment"], self.payload["comment"])
+        event = emit.call_args
+        self.assertEqual(event.args[0], "review.submitted")
+        self.assertEqual(event.kwargs["correlation_id"], "final-review-evidence-1")
+
+    def test_review_validation_and_authentication_are_enforced(self):
+        invalid = {**self.payload, "comment": "", "rating": 6}
+        response = self.client.post(
+            "/api/destinations/place-review-final/reviews",
+            invalid,
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(DestinationReview.objects.count(), 0)
+        self.client.post("/api/logout", {}, content_type="application/json")
+        self.assertEqual(
+            self.client.get("/api/destinations/place-review-final/reviews").status_code,
+            401,
+        )
+
+
+class CommunityPostApiTests(ApiTestBase):
+    def setUp(self):
+        self.owner = self.create_user()
+        self.other = self.create_user(
+            email="community-other@example.com", username="Community Other"
+        )
+        self.admin = self.create_user(
+            email="community-admin@example.com",
+            username="Community Admin",
+            role=UserAccount.ROLE_ADMIN,
+        )
+        self.login(self.owner.email)
+        self.payload = {
+            "post_type": "experience",
+            "title": "A weekend in Newark",
+            "body": "We visited the museum and shared a memorable travel experience.",
+            "destination_name": "Newark",
+            "picture_url": "https://example.com/newark-trip.jpg",
+        }
+
+    @patch("backend.services.community_service.emit_event")
+    def test_post_crud_search_picture_reference_and_events(self, emit):
+        created = self.client.post(
+            "/api/community/posts",
+            self.payload,
+            content_type="application/json",
+            HTTP_X_CORRELATION_ID="community-evidence-1",
+        )
+        self.assertEqual(created.status_code, 201)
+        post_id = created.json()["post"]["post_id"]
+        self.assertEqual(created.json()["post"]["picture_url"], self.payload["picture_url"])
+        self.assertTrue(CommunityPost.objects.filter(post_id=post_id).exists())
+
+        search = self.client.get("/api/community/posts", {"q": "museum"})
+        self.assertEqual(search.status_code, 200)
+        self.assertEqual(search.json()["count"], 1)
+        missing = self.client.get("/api/community/posts", {"q": "beach"})
+        self.assertEqual(missing.json()["count"], 0)
+
+        updated = self.client.patch(
+            f"/api/community/posts/{post_id}",
+            {"title": "Updated Newark experience", "body": "Updated displayed post text for travelers."},
+            content_type="application/json",
+        )
+        self.assertEqual(updated.status_code, 200)
+        deleted = self.client.delete(f"/api/community/posts/{post_id}")
+        self.assertEqual(deleted.status_code, 200)
+        self.assertFalse(CommunityPost.objects.filter(post_id=post_id).exists())
+        event_types = [call.args[0] for call in emit.call_args_list]
+        self.assertEqual(
+            event_types,
+            [
+                "community.post.created",
+                "community.post.updated",
+                "community.post.deleted",
+            ],
+        )
+        self.assertEqual(
+            emit.call_args_list[0].kwargs["correlation_id"],
+            "community-evidence-1",
+        )
+
+    def test_ownership_picture_validation_and_admin_moderation(self):
+        created = self.client.post(
+            "/api/community/posts", self.payload, content_type="application/json"
+        )
+        post_id = created.json()["post"]["post_id"]
+
+        self.client.post("/api/logout", {}, content_type="application/json")
+        self.login(self.other.email)
+        forbidden = self.client.patch(
+            f"/api/community/posts/{post_id}",
+            {"body": "Another user must not be allowed to alter this post."},
+            content_type="application/json",
+        )
+        self.assertEqual(forbidden.status_code, 403)
+        invalid_url = self.client.post(
+            "/api/community/posts",
+            {**self.payload, "picture_url": "javascript:alert(1)"},
+            content_type="application/json",
+        )
+        self.assertEqual(invalid_url.status_code, 400)
+
+        self.client.post("/api/logout", {}, content_type="application/json")
+        self.login(self.admin.email)
+        moderated = self.client.put(
+            f"/api/community/posts/{post_id}/moderation",
+            {"moderation_status": "hidden"},
+            content_type="application/json",
+        )
+        self.assertEqual(moderated.status_code, 200)
+        self.assertEqual(moderated.json()["post"]["moderation_status"], "hidden")
+        self.assertTrue(
+            AdminAuditLog.objects.filter(
+                action_type="community_post_moderated", target_id=str(post_id)
+            ).exists()
+        )
+
+        self.client.post("/api/logout", {}, content_type="application/json")
+        self.login(self.other.email)
+        self.assertEqual(self.client.get("/api/community/posts").json()["count"], 0)
 
 
 class DomainEventWiringTests(ApiTestBase):

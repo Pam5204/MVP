@@ -23,6 +23,7 @@
         <a href="#register" data-route="register" data-auth-view="logged-out">Register</a>
         <a href="#dashboard" data-route="dashboard" data-auth-view="logged-in">Search</a>
         <a href="#bucket" data-route="bucket" data-auth-view="logged-in">Bucket List</a>
+        <a href="#community" data-route="community" data-auth-view="logged-in">Community</a>
         <a href="#profile" data-route="profile" data-auth-view="logged-in">Profile</a>
         <a href="#admin" data-route="admin" data-admin-view>Admin</a>
       </nav>
@@ -154,6 +155,38 @@
             <ul class="info-list" id="pointsOfInterest"></ul>
           </aside>
         </div>
+        <section class="workspace review-workspace" aria-labelledby="reviewsTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Traveler feedback</p>
+              <h2 id="reviewsTitle">Reviews and ratings</h2>
+            </div>
+          </div>
+          <div class="review-layout">
+            <form class="panel review-form" id="reviewForm" novalidate>
+              <h3>Review this destination</h3>
+              <label>Rating
+                <select name="rating" required>
+                  <option value="">Choose 1-5</option>
+                  <option value="5">5 - Excellent</option>
+                  <option value="4">4 - Very good</option>
+                  <option value="3">3 - Good</option>
+                  <option value="2">2 - Fair</option>
+                  <option value="1">1 - Poor</option>
+                </select>
+              </label>
+              <label>Comment
+                <textarea name="comment" rows="5" maxlength="2000" required></textarea>
+              </label>
+              <button class="primary-button" type="submit">Submit review</button>
+              <p class="form-message" id="reviewMessage" role="status"></p>
+            </form>
+            <div>
+              <div class="loading-state" id="reviewsLoading" hidden>Loading reviews...</div>
+              <div class="review-list" id="destinationReviews" aria-live="polite"></div>
+            </div>
+          </div>
+        </section>
       </section>
 
       <!-- The signed-in user's editable saved destinations. -->
@@ -166,6 +199,54 @@
           <div class="loading-state" id="bucketLoading" hidden>Loading your bucket list…</div>
           <div class="bucket-grid" id="bucketList"></div>
         </section>
+      </section>
+
+      <!-- Required discussion board with CRUD, search, picture references, and moderation. -->
+      <section class="view" id="communityView" aria-labelledby="communityTitle">
+        <div class="community-layout">
+          <form class="panel" id="communityPostForm" novalidate>
+            <p class="eyebrow">Share with travelers</p>
+            <h2>Create a community post</h2>
+            <label>Post type
+              <select name="post_type" required>
+                <option value="experience">Travel experience</option>
+                <option value="question">Question</option>
+              </select>
+            </label>
+            <label>Title
+              <input type="text" name="title" minlength="3" maxlength="160" required>
+            </label>
+            <label>Post text
+              <textarea name="body" rows="6" minlength="10" maxlength="5000" required></textarea>
+            </label>
+            <label>Destination (optional)
+              <input type="text" name="destination_name" maxlength="255" placeholder="Newark, New Jersey">
+            </label>
+            <label>Picture URL (optional)
+              <input type="url" name="picture_url" maxlength="1000" placeholder="https://example.com/trip.jpg">
+            </label>
+            <button class="primary-button" type="submit">Publish post</button>
+            <p class="form-message" id="communityFormMessage" role="status"></p>
+          </form>
+          <section class="workspace">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Community discussion</p>
+                <h2 id="communityTitle">Experiences and questions</h2>
+              </div>
+            </div>
+            <form class="search-row" id="communitySearchForm" role="search">
+              <label>Search displayed post text
+                <input type="search" name="q" maxlength="200" placeholder="beach, museum, Newark">
+              </label>
+              <button class="ghost-button" type="submit">Search posts</button>
+              <button class="ghost-button" id="communityClearSearch" type="button">Clear</button>
+            </form>
+            <p class="status-message" id="communityStatus" role="status"></p>
+            <div class="loading-state" id="communityLoading" hidden>Loading community posts...</div>
+            <div class="community-feed" id="communityPostList" aria-live="polite"></div>
+          </section>
+        </div>
       </section>
 
       <!-- Account summary and profile update form. -->

@@ -44,10 +44,19 @@ PUT    /api/profile
 GET    /api/destinations/search
 GET    /api/destinations/search-history
 GET    /api/destinations/{place_id}
+GET    /api/destinations/{place_id}/reviews
+POST   /api/destinations/{place_id}/reviews
 POST   /api/bucket-list
 GET    /api/bucket-list
 PUT    /api/bucket-list/{bucket_item_id}
 DELETE /api/bucket-list/{bucket_item_id}
+GET    /api/community/posts?q={displayed_text}
+POST   /api/community/posts
+GET    /api/community/posts/{post_id}
+PUT    /api/community/posts/{post_id}
+PATCH  /api/community/posts/{post_id}
+DELETE /api/community/posts/{post_id}
+PUT    /api/community/posts/{post_id}/moderation
 GET    /api/admin/users
 PUT    /api/admin/users/{user_id}/role
 PUT    /api/admin/users/{user_id}/status
@@ -55,3 +64,6 @@ GET    /api/admin/destinations
 POST   /api/admin/destinations/{cache_id}/review
 GET    /api/admin/audit-logs
 ```
+
+Review and community mutations return an `X-Correlation-ID` header and a
+matching `correlation_id` response field for centralized-log evidence.

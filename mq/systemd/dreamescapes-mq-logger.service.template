@@ -1,0 +1,21 @@
+[Unit]
+Description=DreamEscapes RabbitMQ centralized final-feature logger
+After=network-online.target rabbitmq-server.service
+Wants=network-online.target
+Requires=rabbitmq-server.service
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_GROUP__
+WorkingDirectory=__REPO_ROOT__
+EnvironmentFile=/etc/dreamescapes/mq-logger.env
+Environment=PYTHONPATH=__REPO_ROOT__
+ExecStart=__PYTHON_BIN__ -m mq.listener central
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

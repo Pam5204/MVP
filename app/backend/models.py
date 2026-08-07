@@ -4,6 +4,7 @@ The field and table names intentionally match ``db/DreamEscapes.sql`` so the
 Django and the DB-role consumer share one MySQL-only persistence contract.
 """
 
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -187,3 +188,116 @@ class AdminAuditLog(models.Model):
 
     def __str__(self):
         return f"{self.action_type}: {self.target_type} {self.target_id}"
+
+
+class DestinationReference(models.Model):
+    """A stable destination identity shared by persisted user reviews.
+
+    Geoapify search/cache rows are intentionally transient and may contain an
+    entire result set.  This small record gives reviews a durable relational
+    target keyed by Geoapify's place ID without coupling them to cache expiry.
+    """
+
+    destination_id = models.BigAutoField(primary_key=True)
+    place_id = models.CharField(max_length=255, unique=True)
+    destination_name = models.CharField(max_length=255)
+    city = models.CharField(max_length=150, blank=True)
+    country = models.CharField(max_length=150, blank=True)
+    formatted_address = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "destinations"
+        indexes = [
+            models.Index(fields=["destination_name"], name="idx_destination_name"),
+            models.Index(fields=["country"], name="idx_destination_country"),
+        ]
+
+    def __str__(self):
+        return self.destination_name
+
+
+class DestinationReview(models.Model):
+    """An authenticated user's persisted comment and 1-5 destination rating."""
+
+    review_id = models.BigAutoField(primary_key=True)
+    user = models.ForeignKey(
+        UserAccount,
+        on_delete=models.CASCADE,
+        related_name="destination_reviews",
+        db_column="user_id",
+    )
+    destination = models.ForeignKey(
+        DestinationReference,
+        on_delete=models.CASCADE,
+        related_name="reviews",
+        db_column="destination_id",
+    )
+    comment = models.TextField()
+    rating = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "destination_reviews"
+        indexes = [
+            models.Index(fields=["destination"], name="idx_review_destination"),
+            models.Index(fields=["user"], name="idx_review_user"),
+            models.Index(fields=["created_at"], name="idx_review_created"),
+        ]
+
+    def __str__(self):
+        return f"{self.destination}: {self.rating}/5 by {self.user}"
+
+
+class CommunityPost(models.Model):
+    """A persisted travel experience or question on the community page."""
+
+    TYPE_EXPERIENCE = "experience"
+    TYPE_QUESTION = "question"
+    TYPE_CHOICES = (
+        (TYPE_EXPERIENCE, "Travel experience"),
+        (TYPE_QUESTION, "Question"),
+    )
+
+    STATUS_VISIBLE = "visible"
+    STATUS_HIDDEN = "hidden"
+    STATUS_CHOICES = (
+        (STATUS_VISIBLE, "Visible"),
+        (STATUS_HIDDEN, "Hidden"),
+    )
+
+    post_id = models.BigAutoField(primary_key=True)
+    author = models.ForeignKey(
+        UserAccount,
+        on_delete=models.CASCADE,
+        related_name="community_posts",
+        db_column="author_user_id",
+    )
+    post_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    title = models.CharField(max_length=160)
+    body = models.TextField()
+    destination_name = models.CharField(max_length=255, blank=True)
+    picture_url = models.URLField(max_length=1000, blank=True)
+    moderation_status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_VISIBLE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "community_posts"
+        indexes = [
+            models.Index(fields=["author"], name="idx_community_author"),
+            models.Index(fields=["post_type"], name="idx_community_type"),
+            models.Index(fields=["moderation_status"], name="idx_community_status"),
+            models.Index(fields=["created_at"], name="idx_community_created"),
+        ]
+
+    def __str__(self):
+        return self.title

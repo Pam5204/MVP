@@ -63,11 +63,15 @@ BUCKETLIST_EVENTS_QUEUE = os.getenv(
 CACHE_REFRESH_QUEUE = os.getenv("CACHE_REFRESH_QUEUE", "cache.refresh.queue")
 API_FAILURE_QUEUE = os.getenv("API_FAILURE_QUEUE", "api.failure.queue")
 ADMIN_AUDIT_QUEUE = os.getenv("ADMIN_AUDIT_QUEUE", "admin.audit.queue")
+CENTRAL_LOG_QUEUE = os.getenv("CENTRAL_LOG_QUEUE", "central.log.queue")
 
 ERROR_QUEUE = os.getenv("ERROR_QUEUE", "project.error.queue")
 ERROR_ROUTING_KEY = os.getenv("ERROR_ROUTING_KEY", "error.message")
 BAD_MESSAGE_LOG_FILE = os.getenv(
     "BAD_MESSAGE_LOG_FILE", "/var/log/dreamescapes/mq_bad_messages.log"
+)
+CENTRAL_LOG_FILE = os.getenv(
+    "CENTRAL_LOG_FILE", "/var/log/dreamescapes/final_features.jsonl"
 )
 
 
@@ -98,6 +102,10 @@ QUEUE_BINDINGS = {
     CACHE_REFRESH_QUEUE: QueueBinding(CACHE_EXCHANGE, ("cache.#",)),
     API_FAILURE_QUEUE: QueueBinding(CACHE_EXCHANGE, ("api.#",)),
     ADMIN_AUDIT_QUEUE: QueueBinding(ADMIN_EXCHANGE, ("admin.#",)),
+    # Required final-feature actions are consumed additively into one JSONL
+    # file by the supervised MQ logger. The same correlation ID returned by
+    # the API remains in each event for production evidence.
+    CENTRAL_LOG_QUEUE: QueueBinding(LOG_EXCHANGE, ("review.#", "community.#")),
 }
 
 # ---------------------------------------------------------------------------
@@ -134,6 +142,12 @@ SUPPORTED_EVENT_TYPES = frozenset(
         "admin.destination.reviewed",
         "admin.audit.created",
         "admin.unauthorized.attempted",
+        # Required final-deliverable review and community logging events.
+        "review.submitted",
+        "community.post.created",
+        "community.post.updated",
+        "community.post.deleted",
+        "community.post.moderated",
     }
 )
 
@@ -146,6 +160,8 @@ EVENT_EXCHANGES = {
         if event_type.startswith("bucketlist.")
         else CACHE_EXCHANGE
         if event_type.startswith(("cache.", "api."))
+        else LOG_EXCHANGE
+        if event_type.startswith(("review.", "community."))
         else ADMIN_EXCHANGE
     )
     for event_type in SUPPORTED_EVENT_TYPES

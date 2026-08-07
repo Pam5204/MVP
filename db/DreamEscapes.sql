@@ -79,6 +79,66 @@ CREATE TABLE IF NOT EXISTS `destination_cache` (
   KEY `idx_cache_expires` (`expires_at`)
 ) ENGINE=InnoDB;
 
+-- Stable destination identities keep reviews relational even after a cache
+-- entry expires or one search cache row contains several Geoapify results.
+CREATE TABLE IF NOT EXISTS `destinations` (
+  `destination_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `place_id` VARCHAR(255) NOT NULL,
+  `destination_name` VARCHAR(255) NOT NULL,
+  `city` VARCHAR(150) NOT NULL DEFAULT '',
+  `country` VARCHAR(150) NOT NULL DEFAULT '',
+  `formatted_address` TEXT NOT NULL,
+  `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+    ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`destination_id`),
+  UNIQUE KEY `uq_destination_place` (`place_id`),
+  KEY `idx_destination_name` (`destination_name`),
+  KEY `idx_destination_country` (`country`)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `destination_reviews` (
+  `review_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  `destination_id` BIGINT UNSIGNED NOT NULL,
+  `comment` TEXT NOT NULL,
+  `rating` SMALLINT UNSIGNED NOT NULL,
+  `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+    ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`review_id`),
+  KEY `idx_review_destination` (`destination_id`),
+  KEY `idx_review_user` (`user_id`),
+  KEY `idx_review_created` (`created_at`),
+  CONSTRAINT `chk_review_rating` CHECK (`rating` BETWEEN 1 AND 5),
+  CONSTRAINT `fk_review_user`
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_review_destination`
+    FOREIGN KEY (`destination_id`) REFERENCES `destinations` (`destination_id`)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `community_posts` (
+  `post_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `author_user_id` BIGINT UNSIGNED NOT NULL,
+  `post_type` ENUM('experience', 'question') NOT NULL,
+  `title` VARCHAR(160) NOT NULL,
+  `body` TEXT NOT NULL,
+  `destination_name` VARCHAR(255) NOT NULL DEFAULT '',
+  `picture_url` VARCHAR(1000) NOT NULL DEFAULT '',
+  `moderation_status` ENUM('visible', 'hidden') NOT NULL DEFAULT 'visible',
+  `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+    ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`post_id`),
+  KEY `idx_community_author` (`author_user_id`),
+  KEY `idx_community_type` (`post_type`),
+  KEY `idx_community_status` (`moderation_status`),
+  KEY `idx_community_created` (`created_at`),
+  CONSTRAINT `fk_community_author`
+    FOREIGN KEY (`author_user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS `search_history` (
   `search_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `user_id` BIGINT UNSIGNED NULL,

@@ -466,6 +466,110 @@ a:focus-visible {
   color: var(--muted);
 }
 
+/* Required review/rating and community discussion components. */
+.review-workspace {
+  margin-top: 24px;
+}
+
+.review-layout,
+.community-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.4fr);
+  gap: 22px;
+}
+
+.review-form {
+  padding: 20px;
+  box-shadow: none;
+}
+
+.review-form h3,
+.community-post h3 {
+  margin: 0;
+}
+
+.review-list,
+.community-feed {
+  display: grid;
+  gap: 12px;
+}
+
+.review-card,
+.community-post {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.review-heading,
+.community-post-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.rating-badge,
+.post-type,
+.moderation-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #e4f1f3;
+  color: var(--teal);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.community-layout {
+  align-items: start;
+}
+
+.community-feed {
+  margin-top: 18px;
+}
+
+.community-post.is-moderated {
+  border-color: #d49b26;
+  background: #fff8e8;
+}
+
+.community-post-body {
+  margin: 12px 0;
+  white-space: pre-wrap;
+}
+
+.post-meta,
+.review-card small {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.community-picture {
+  display: block;
+  width: min(100%, 620px);
+  max-height: 360px;
+  margin: 14px 0;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.community-actions {
+  margin-top: 14px;
+}
+
+.community-edit-form {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.community-edit-form[hidden] {
+  display: none;
+}
+
 .status-message {
   min-height: 24px;
   margin-top: 14px;
@@ -655,7 +759,9 @@ textarea {
   .status-band,
   .dashboard-grid,
   .profile-grid,
-  .details-layout {
+  .details-layout,
+  .review-layout,
+  .community-layout {
     grid-template-columns: 1fr;
   }
 

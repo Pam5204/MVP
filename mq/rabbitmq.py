@@ -21,6 +21,8 @@ from mq.config import (
     AUTH_REQUEST_QUEUE,
     AUTH_REQUEST_TYPES,
     BAD_MESSAGE_LOG_FILE,
+    CENTRAL_LOG_FILE,
+    CENTRAL_LOG_QUEUE,
     BUCKETLIST_EXCHANGE,
     CACHE_EXCHANGE,
     ERROR_EXCHANGE,
@@ -405,10 +407,27 @@ def consume_event_queue(
 
 
 def append_line(path: str, line: str) -> None:
+    """Append exactly one line, creating only the configured parent directory."""
     log_path = Path(path)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("a", encoding="utf-8") as log_file:
         log_file.write(line + "\n")
+
+
+def consume_central_logs() -> None:
+    """Persist validated final-feature events as append-only JSON Lines."""
+
+    def write_event(event: dict[str, Any]) -> None:
+        append_line(
+            CENTRAL_LOG_FILE,
+            json.dumps(event, sort_keys=True, separators=(",", ":")),
+        )
+
+    print(
+        f"Listening on {CENTRAL_LOG_QUEUE}; appending validated events to "
+        f"{CENTRAL_LOG_FILE}"
+    )
+    consume_event_queue(CENTRAL_LOG_QUEUE, write_event)
 
 
 def consume_bad_messages() -> None:
